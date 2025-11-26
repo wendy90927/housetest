@@ -17,40 +17,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const itemsRef = collection(db, "items");
 
-// --- State ---
-let allItems = [];
-let currentActionItem = null;
-let pendingAddQty = 1;
-let currentScreen = 'login';
-let homeFilterRoom = 'all';
-let homeFilterCategory = 'all'; 
-let takeoutFilterRoom = 'all';
-let takeoutFilterCategory = 'all'; 
-let unsubscribeItems = null;
-let previousScreen = 'home';
-let focusTargetId = null; 
-let searchResults = [];
-
-// 标签暂存
-let pendingTags = []; 
-
-// 自动推断规则
-const INFERENCE_RULES = {
-    '食品饮料': ['奶', '水', '茶', '酒', '饮料', '饼', '糖', '巧克力', '可乐', '雪碧', '汁', '咖啡', '燕麦'],
-    '烹饪调料': ['油', '盐', '酱', '醋', '米', '面粉', '调料', '鸡精', '味精', '糖', '花椒', '八角'],
-    '居家日用': ['纸', '洗衣', '清洁', '剂', '刷', '垃圾袋', '毛巾', '皂', '洗洁精', '柔顺剂'],
-    '个人护理': ['洗发', '沐浴', '牙膏', '牙刷', '面霜', '乳液', '口红', '粉底', '卫生巾', '棉', '防晒', '卸妆', '药', '维C', '钙片'],
-    '文具工具': ['笔', '本', '胶', '剪刀', '电池', '螺丝', '刀', '尺', '胶带'],
-    '电子数码': ['线', '充电', '耳机', '鼠标', '键盘', 'U盘', '手机', '平板']
-};
-
-const TAG_SUGGESTIONS = {
-    '奶': ['饮品', '早餐'], '水': ['饮品', '囤货'], '纸': ['日用', '消耗品'],
-    '洗发': ['洗护'], '沐浴': ['洗护'], '牙膏': ['洗护'], '面霜': ['护肤'],
-    '口红': ['彩妆'], '感冒': ['药品'], '维': ['保健品']
-};
-
-// --- Audio Engine ---
+// --- Audio Engine (优先加载) ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playSound(type) {
     if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -75,6 +42,47 @@ function playSound(type) {
     }
 }
 
+window.announce = (msg, type = 'normal') => {
+    const el = document.getElementById('live-announcer');
+    if(el) {
+        el.textContent = msg;
+        if (msg.includes("成功") || msg.includes("已添加") || msg.includes("已删除") || msg.includes("更新") || msg.includes("进入")) playSound('success');
+        else if (msg.includes("失败") || msg.includes("错误") || msg.includes("不足")) playSound('error');
+        setTimeout(() => el.textContent = '', 1000);
+    }
+};
+
+// --- State ---
+let allItems = [];
+let currentActionItem = null;
+let pendingAddQty = 1;
+let currentScreen = 'login';
+let homeFilterRoom = 'all';
+let homeFilterCategory = 'all'; 
+let takeoutFilterRoom = 'all';
+let takeoutFilterCategory = 'all'; 
+let unsubscribeItems = null;
+let previousScreen = 'home';
+let focusTargetId = null; 
+let searchResults = [];
+let pendingTags = []; 
+
+// 自动推断规则
+const INFERENCE_RULES = {
+    '食品饮料': ['奶', '水', '茶', '酒', '饮料', '饼', '糖', '巧克力', '可乐', '雪碧', '汁', '咖啡', '燕麦'],
+    '烹饪调料': ['油', '盐', '酱', '醋', '米', '面粉', '调料', '鸡精', '味精', '糖', '花椒', '八角'],
+    '居家日用': ['纸', '洗衣', '清洁', '剂', '刷', '垃圾袋', '毛巾', '皂', '洗洁精', '柔顺剂'],
+    '个人护理': ['洗发', '沐浴', '牙膏', '牙刷', '面霜', '乳液', '口红', '粉底', '卫生巾', '棉', '防晒', '卸妆', '药', '维C', '钙片'],
+    '文具工具': ['笔', '本', '胶', '剪刀', '电池', '螺丝', '刀', '尺', '胶带'],
+    '电子数码': ['线', '充电', '耳机', '鼠标', '键盘', 'U盘', '手机', '平板']
+};
+
+const TAG_SUGGESTIONS = {
+    '奶': ['饮品', '早餐'], '水': ['饮品', '囤货'], '纸': ['日用', '消耗品'],
+    '洗发': ['洗护'], '沐浴': ['洗护'], '牙膏': ['洗护'], '面霜': ['护肤'],
+    '口红': ['彩妆'], '感冒': ['药品'], '维': ['保健品']
+};
+
 // --- Unit Presets ---
 let UNIT_LIST = ["个", "包", "箱", "瓶", "袋", "条", "块", "只", "支", "把", "张", "双", "套", "组", "对", "本", "册", "罐", "桶", "壶", "杯", "斤", "公斤", "升", "毫升"];
 const savedUnits = JSON.parse(localStorage.getItem('custom_units') || '[]');
@@ -89,22 +97,149 @@ function learnNewUnit(unit) {
 }
 
 const savedEmail = localStorage.getItem('savedEmail');
-if(savedEmail) document.getElementById('login-email').value = savedEmail;
+if(savedEmail) {
+    const emailInput = document.getElementById('login-email');
+    if(emailInput) emailInput.value = savedEmail;
+}
 
-window.announce = (msg, type = 'normal') => {
-    const el = document.getElementById('live-announcer');
-    if(el) {
-        el.textContent = msg;
-        if (msg.includes("成功") || msg.includes("已添加") || msg.includes("已删除") || msg.includes("自动填入") || msg.includes("就绪") || msg.includes("进入")) playSound('success');
-        else if (msg.includes("失败") || msg.includes("错误") || msg.includes("不足") || msg.includes("未找到")) playSound('error');
-        setTimeout(() => el.textContent = '', 1000);
+// --- Screen Switcher ---
+function switchScreen(screenId) {
+    if (screenId === 'screen-edit') {
+        if (currentScreen === 'home' || currentScreen === 'takeout') previousScreen = currentScreen;
+        else if (currentScreen === 'results') previousScreen = document.getElementById('btn-back-results').dataset.return || 'home';
     }
-};
+
+    document.querySelectorAll('.screen').forEach(el => el.classList.add('hidden'));
+    const target = document.getElementById(screenId);
+    if (!target) { 
+        console.error("Screen not found:", screenId); 
+        announce("错误：找不到界面");
+        return; 
+    } 
+    target.classList.remove('hidden');
+    
+    // 更新状态
+    if (screenId === 'screen-home') currentScreen = 'home';
+    else if (screenId === 'screen-takeout') currentScreen = 'takeout';
+    else if (screenId === 'screen-results') currentScreen = 'results';
+    else if (screenId === 'screen-edit') currentScreen = 'edit';
+    else if (screenId === 'screen-add') currentScreen = 'add';
+    else if (screenId === 'screen-settings') currentScreen = 'settings';
+    else currentScreen = 'other';
+    
+    if (!focusTargetId) {
+        setTimeout(() => {
+            const h1 = target.querySelector('h1');
+            if (h1) h1.focus();
+        }, 100);
+    }
+
+    if(screenId === 'screen-home') refreshHomeList();
+    if(screenId === 'screen-takeout') refreshTakeoutList();
+}
+
+// --- ★★★ 账户设置模块 (前置优先绑定) ★★★ ---
+// 放在这里是为了防止后面的代码报错导致按钮失效
+const btnOpenSettings = document.getElementById('btn-open-settings');
+
+// 1. 定义公共打开逻辑
+function openSettingsAction() {
+    const menu = document.getElementById('menu-account-dropdown');
+    if(menu) menu.classList.add('hidden');
+    
+    announce("正在进入账户设置"); // 语音反馈
+    switchScreen('screen-settings');
+    
+    if (auth.currentUser) {
+        const display = document.getElementById('settings-email-display');
+        if(display) display.textContent = auth.currentUser.email;
+    }
+    switchTab('profile');
+}
+
+// 2. 绑定事件
+if (btnOpenSettings) {
+    // 鼠标点击
+    btnOpenSettings.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openSettingsAction();
+    });
+
+    // 键盘回车 (强制触发)
+    btnOpenSettings.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            openSettingsAction();
+        }
+    });
+}
+
+// 3. 选项卡切换逻辑
+window.switchTab = function(tabName) {
+    const tabs = ['profile', 'family', 'location'];
+    tabs.forEach(t => {
+        const btn = document.getElementById(`tab-btn-${t}`);
+        const panel = document.getElementById(`panel-${t}`);
+        if(!btn || !panel) return;
+
+        if (t === tabName) {
+            btn.setAttribute('aria-selected', 'true');
+            panel.classList.remove('hidden');
+            btn.classList.add('text-blue-600', 'border-blue-600', 'bg-blue-50');
+            btn.classList.remove('text-gray-500', 'border-transparent');
+            panel.focus();
+        } else {
+            btn.setAttribute('aria-selected', 'false');
+            panel.classList.add('hidden');
+            btn.classList.remove('text-blue-600', 'border-blue-600', 'bg-blue-50');
+            btn.classList.add('text-gray-500', 'border-transparent');
+        }
+    });
+    
+    const activeBtn = document.getElementById(`tab-btn-${tabName}`);
+    if(activeBtn) announce(`已切换到 ${activeBtn.textContent}`);
+}
+
+// 4. 绑定选项卡点击
+const tabProfile = document.getElementById('tab-btn-profile');
+if(tabProfile) tabProfile.addEventListener('click', () => switchTab('profile'));
+
+const tabFamily = document.getElementById('tab-btn-family');
+if(tabFamily) tabFamily.addEventListener('click', () => switchTab('family'));
+
+const tabLocation = document.getElementById('tab-btn-location');
+if(tabLocation) tabLocation.addEventListener('click', () => switchTab('location'));
+
+const btnBackSettings = document.getElementById('btn-back-settings');
+if(btnBackSettings) btnBackSettings.addEventListener('click', () => switchScreen('screen-home'));
+
+
+// --- Auth & Init ---
+onAuthStateChanged(auth, user => {
+    if (user) {
+        const menuBtn = document.getElementById('btn-account-menu');
+        if(menuBtn) menuBtn.setAttribute('aria-label', `当前账号：${user.email}，点击展开菜单`);
+        const emailDisplay = document.getElementById('user-email-display');
+        if(emailDisplay) emailDisplay.textContent = user.email.split('@')[0];
+        
+        switchScreen('screen-home');
+        setupDataListener(user.uid);
+        
+        // ★★★ 启动成功提示 ★★★
+        setTimeout(() => announce("系统已更新，准备就绪"), 1500); 
+    } else {
+        if(unsubscribeItems) unsubscribeItems();
+        allItems = [];
+        switchScreen('screen-login');
+    }
+});
+
 
 // --- Focus Trap (Safe Mode) ---
 function safeTrapFocus(id) {
     const el = document.getElementById(id);
-    if (!el) return; // 如果找不到ID，直接跳过，防止报错
+    if (!el) return;
     const focusableElementsString = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
     const focusableContent = el.querySelectorAll(focusableElementsString);
     if (focusableContent.length === 0) return;
@@ -131,124 +266,6 @@ safeTrapFocus('modal-zero');
 safeTrapFocus('modal-confirm');
 safeTrapFocus('modal-forgot');
 
-// --- Screen Switcher ---
-function switchScreen(screenId) {
-    if (screenId === 'screen-edit') {
-        if (currentScreen === 'home' || currentScreen === 'takeout') previousScreen = currentScreen;
-        else if (currentScreen === 'results') previousScreen = document.getElementById('btn-back-results').dataset.return || 'home';
-    }
-
-    document.querySelectorAll('.screen').forEach(el => el.classList.add('hidden'));
-    const target = document.getElementById(screenId);
-    if (!target) { console.error("Screen not found:", screenId); return; } 
-    target.classList.remove('hidden');
-    
-    if (screenId === 'screen-home') currentScreen = 'home';
-    else if (screenId === 'screen-takeout') currentScreen = 'takeout';
-    else if (screenId === 'screen-results') currentScreen = 'results';
-    else if (screenId === 'screen-edit') currentScreen = 'edit';
-    else if (screenId === 'screen-add') currentScreen = 'add';
-    else if (screenId === 'screen-settings') currentScreen = 'settings';
-    else currentScreen = 'other';
-    
-    if (!focusTargetId) {
-        setTimeout(() => {
-            const h1 = target.querySelector('h1');
-            if (h1) h1.focus();
-        }, 100);
-    }
-
-    if(screenId === 'screen-home') refreshHomeList();
-    if(screenId === 'screen-takeout') refreshTakeoutList();
-}
-
-// --- Auth & Init ---
-onAuthStateChanged(auth, user => {
-    if (user) {
-        const menuBtn = document.getElementById('btn-account-menu');
-        if(menuBtn) menuBtn.setAttribute('aria-label', `当前账号：${user.email}，点击展开菜单`);
-        const emailDisplay = document.getElementById('user-email-display');
-        if(emailDisplay) emailDisplay.textContent = user.email.split('@')[0];
-        switchScreen('screen-home');
-        setupDataListener(user.uid);
-        setTimeout(() => announce("系统已更新，准备就绪"), 1000); // 启动提示
-    } else {
-        if(unsubscribeItems) unsubscribeItems();
-        allItems = [];
-        switchScreen('screen-login');
-    }
-});
-
-// --- 关键修复：优先绑定账户设置 (支持鼠标 + 回车键) ---
-const btnOpenSettings = document.getElementById('btn-open-settings');
-if (btnOpenSettings) {
-    // 抽离公共逻辑
-    const openSettingsAction = () => {
-        const menu = document.getElementById('menu-account-dropdown');
-        if(menu) menu.classList.add('hidden');
-        
-        announce("正在进入账户设置"); // 语音反馈，确认执行
-        switchScreen('screen-settings');
-        
-        if (auth.currentUser) {
-            const settingEmail = document.getElementById('settings-email-display');
-            if(settingEmail) settingEmail.textContent = auth.currentUser.email;
-        }
-        switchTab('profile');
-    };
-
-    // 1. 鼠标点击
-    btnOpenSettings.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openSettingsAction();
-    });
-    
-    // 2. 键盘回车/空格 (修复无响应的核心代码)
-    btnOpenSettings.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            openSettingsAction();
-        }
-    });
-}
-
-// --- 选项卡逻辑 ---
-window.switchTab = function(tabName) {
-    const tabs = ['profile', 'family', 'location'];
-    tabs.forEach(t => {
-        const btn = document.getElementById(`tab-btn-${t}`);
-        const panel = document.getElementById(`panel-${t}`);
-        if (!btn || !panel) return;
-
-        if (t === tabName) {
-            btn.setAttribute('aria-selected', 'true');
-            panel.classList.remove('hidden');
-            btn.classList.add('text-blue-600', 'border-blue-600', 'bg-blue-50');
-            btn.classList.remove('text-gray-500', 'border-transparent');
-            panel.focus();
-        } else {
-            btn.setAttribute('aria-selected', 'false');
-            panel.classList.add('hidden');
-            btn.classList.remove('text-blue-600', 'border-blue-600', 'bg-blue-50');
-            btn.classList.add('text-gray-500', 'border-transparent');
-        }
-    });
-    const activeBtn = document.getElementById(`tab-btn-${tabName}`);
-    if(activeBtn) announce(`已切换到 ${activeBtn.textContent}`);
-}
-
-const tabProfile = document.getElementById('tab-btn-profile');
-if(tabProfile) tabProfile.addEventListener('click', () => switchTab('profile'));
-
-const tabFamily = document.getElementById('tab-btn-family');
-if(tabFamily) tabFamily.addEventListener('click', () => switchTab('family'));
-
-const tabLocation = document.getElementById('tab-btn-location');
-if(tabLocation) tabLocation.addEventListener('click', () => switchTab('location'));
-
-const btnBackSettings = document.getElementById('btn-back-settings');
-if(btnBackSettings) btnBackSettings.addEventListener('click', () => switchScreen('screen-home'));
-
 
 // --- Login Handlers ---
 document.getElementById('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('btn-login').click(); } });
@@ -265,21 +282,24 @@ document.getElementById('btn-login').addEventListener('click', async () => {
 
 const btnAccount = document.getElementById('btn-account-menu');
 const menuAccount = document.getElementById('menu-account-dropdown');
-btnAccount.addEventListener('click', (e) => {
-    e.stopPropagation(); playSound('click');
-    menuAccount.classList.toggle('hidden');
-    if(!menuAccount.classList.contains('hidden')) {
-        document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'true');
-        const firstBtn = menuAccount.querySelector('button');
-        if(firstBtn) firstBtn.focus();
-    } else { document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false'); }
-});
-document.addEventListener('click', (e) => {
-    if (!btnAccount.contains(e.target) && !menuAccount.contains(e.target)) {
-        menuAccount.classList.add('hidden');
-        document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false');
-    }
-});
+if(btnAccount && menuAccount) {
+    btnAccount.addEventListener('click', (e) => {
+        e.stopPropagation(); playSound('click');
+        menuAccount.classList.toggle('hidden');
+        if(!menuAccount.classList.contains('hidden')) {
+            document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'true');
+            const firstBtn = menuAccount.querySelector('button');
+            if(firstBtn) firstBtn.focus();
+        } else { document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false'); }
+    });
+    document.addEventListener('click', (e) => {
+        if (!btnAccount.contains(e.target) && !menuAccount.contains(e.target)) {
+            menuAccount.classList.add('hidden');
+            document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false');
+        }
+    });
+}
+
 document.getElementById('btn-logout').addEventListener('click', () => signOut(auth).then(() => announce("已退出")));
 document.getElementById('btn-clear-data').addEventListener('click', () => {
     menuAccount.classList.add('hidden');
@@ -312,7 +332,9 @@ document.getElementById('btn-submit-reg').addEventListener('click', () => {
 document.getElementById('btn-forgot-pass').addEventListener('click', () => {
     document.getElementById('modal-forgot').classList.remove('hidden'); setTimeout(() => document.getElementById('title-forgot').focus(), 100);
 });
-document.getElementById('btn-cancel-forgot').addEventListener('click', () => document.getElementById('modal-forgot').classList.add('hidden'););
+const btnCancelForgot = document.getElementById('btn-cancel-forgot');
+if(btnCancelForgot) btnCancelForgot.addEventListener('click', () => document.getElementById('modal-forgot').classList.add('hidden'));
+
 document.getElementById('btn-send-reset').addEventListener('click', () => {
     const e = document.getElementById('forgot-email').value; if(!e) return;
     sendPasswordResetEmail(auth, e).then(() => { alert("已发送"); document.getElementById('modal-forgot').classList.add('hidden'); }).catch(err => alert(err.message));
@@ -611,7 +633,6 @@ document.getElementById('btn-add-qty-trigger').addEventListener('click', () => {
     });
 });
 
-// 修改: 提交后不跳转，重置表单并聚焦 Name 输入框
 document.getElementById('form-add').addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = document.getElementById('add-name').value.trim();
