@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>家庭物品管家V1.9</title>
+    <title>家庭物品管家V2.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -28,7 +28,7 @@
                     <span class="font-bold text-lg">记住账号</span>
                 </label>
             </div>
-            <button id="btn-login" class="w-full bg-blue-600 text-white p-4 rounded-lg font-bold text-xl hover:bg-blue-700 mb-4">登录</button>
+            <button id="btn-login" class="w-full bg-blue-600 text-white p-4 rounded-lg font-bold text-xl hover:bg-blue-700 mb-4 transition-colors">登录</button>
             <div class="flex justify-between mt-4">
                 <button id="btn-to-register" class="text-blue-700 font-bold hover:underline p-2">注册新账号</button>
                 <button id="btn-forgot-pass" class="text-gray-600 font-bold hover:underline p-2">忘记密码?</button>
@@ -54,18 +54,22 @@
         <header class="bg-blue-800 text-white p-4 shadow-md sticky top-0 z-20">
             <div class="max-w-3xl mx-auto flex flex-col gap-4">
                 <div class="flex justify-between items-center mb-1 relative">
-                    <h1 id="title-home" class="text-xl font-bold outline-none" tabindex="-1">物品管家</h1>
+                    <div class="flex flex-col">
+                        <h1 id="title-home" class="text-xl font-bold outline-none" tabindex="-1">物品管家</h1>
+                        <span id="current-family-display" class="text-sm font-normal text-blue-200" aria-label="当前家庭">加载中...</span>
+                    </div>
+                    
                     <button id="btn-account-menu" aria-haspopup="true" aria-expanded="false" class="text-sm bg-blue-900 hover:bg-blue-700 px-3 py-2 rounded border border-blue-500 font-bold flex items-center gap-2 focus:ring-2 ring-white">
                         <span id="user-email-display">账号</span>
                         <span aria-hidden="true">▼</span>
                     </button>
                     <div id="menu-account-dropdown" class="hidden absolute top-full right-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-200 text-gray-900 z-50 flex flex-col">
-                        <div class="p-4 border-b border-gray-200 bg-blue-50">
-                            <p class="text-sm font-bold text-gray-500 mb-2" id="lbl-family-switch">切换当前家庭</p>
-                            <div id="menu-family-list" class="flex flex-col gap-2" role="group" aria-labelledby="lbl-family-switch">
+                        <div class="bg-gray-50 p-2 border-b border-gray-200">
+                            <span class="text-sm font-bold text-gray-500 px-2">切换家庭：</span>
+                            <div id="menu-family-list" class="flex flex-col mt-1 space-y-1">
                                 </div>
                         </div>
-                        <button id="btn-open-settings" class="w-full text-left px-4 py-4 hover:bg-gray-100 font-bold text-blue-800 border-b border-gray-200">账户设置</button>
+                        <button id="btn-open-settings" class="w-full text-left px-4 py-4 hover:bg-gray-100 font-bold text-blue-800 border-b border-gray-200">账户与家庭设置</button>
                         <button id="btn-clear-data" class="w-full text-left px-4 py-4 hover:bg-red-50 text-red-700 font-bold border-b border-gray-200">清空所有数据</button>
                         <button id="btn-delete-account" class="w-full text-left px-4 py-4 hover:bg-red-50 text-red-700 font-bold border-b border-gray-200">注销账号</button>
                         <button id="btn-logout" class="w-full text-left px-4 py-4 hover:bg-gray-100 font-bold text-gray-800">退出登录</button>
@@ -316,8 +320,7 @@
         </div>
         <div class="max-w-3xl mx-auto w-full p-6 flex-grow overflow-y-auto">
             <p class="text-lg font-bold text-gray-700 mb-4" id="room-delete-subtitle">请选择要删除的房间：</p>
-            <div id="container-room-delete-list" role="list">
-                </div>
+            <div id="container-room-delete-list" role="list"></div>
         </div>
     </div>
 
@@ -348,19 +351,23 @@
                         <label class="block font-bold text-gray-500 mb-1">注册邮箱</label>
                         <p id="settings-email-display" class="text-xl text-blue-800 font-bold">loading...</p>
                     </div>
-                    <button class="text-blue-600 font-bold underline p-2 hover:bg-blue-50 rounded mt-2">修改密码</button>
                 </div>
             </div>
 
             <div id="panel-family" class="tab-panel hidden flex-grow p-6" role="tabpanel" aria-labelledby="tab-btn-family">
                 <h2 class="text-2xl font-bold mb-4 text-gray-800">家庭管理</h2>
                 <div class="bg-white p-6 rounded-xl border-2 border-gray-200 shadow-sm mb-6">
-                    <label for="settings-family-select" class="block font-bold text-lg mb-2">选择家庭：</label>
+                    <label for="settings-family-select" class="block font-bold text-lg mb-2">选择要编辑的家庭：</label>
                     <select id="settings-family-select" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg font-bold mb-6"></select>
                     
+                    <div class="flex gap-4 mb-4">
+                         <button id="btn-family-tab-save" class="flex-1 bg-blue-600 text-white p-3 rounded-lg font-bold">保存并应用</button>
+                         <button id="btn-family-tab-cancel" class="flex-1 bg-gray-200 text-gray-800 p-3 rounded-lg font-bold">取消</button>
+                    </div>
+
                     <div class="mgmt-controls">
                         <button id="btn-new-family" class="mgmt-btn btn-green">新建家庭</button>
-                        <button id="btn-edit-family" class="mgmt-btn btn-blue">编辑家庭</button>
+                        <button id="btn-edit-family" class="mgmt-btn btn-blue">重命名/修改</button>
                         <button id="btn-delete-family" class="mgmt-btn btn-red">删除家庭</button>
                     </div>
                 </div>
@@ -369,9 +376,14 @@
             <div id="panel-rooms" class="tab-panel hidden flex-grow p-6" role="tabpanel" aria-labelledby="tab-btn-rooms">
                 <h2 class="text-2xl font-bold mb-4 text-gray-800">房间管理</h2>
                 <div class="bg-white p-6 rounded-xl border-2 border-gray-200 shadow-sm mb-6">
-                    <label for="settings-room-family-select" class="block font-bold text-lg mb-2">当前家庭：</label>
+                    <label for="settings-room-family-select" class="block font-bold text-lg mb-2">选择家庭：</label>
                     <select id="settings-room-family-select" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg font-bold mb-6"></select>
                     
+                    <div class="flex gap-4 mb-4">
+                         <button id="btn-room-tab-save" class="flex-1 bg-blue-600 text-white p-3 rounded-lg font-bold">保存选择</button>
+                         <button id="btn-room-tab-cancel" class="flex-1 bg-gray-200 text-gray-800 p-3 rounded-lg font-bold">取消</button>
+                    </div>
+
                     <div class="mgmt-controls">
                         <button id="btn-room-add-open" class="mgmt-btn btn-green">新增房间</button>
                         <button id="btn-room-delete-open" class="mgmt-btn btn-red">删除房间</button>

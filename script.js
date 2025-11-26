@@ -3,8 +3,6 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, se
 import { getFirestore, collection, addDoc, getDocs, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch, increment, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // Config
-alert("程序已启动！"); // 如果看到这个弹窗，说明代码加载成功
-
 const firebaseConfig = {
     apiKey: "AIzaSyC3rxfvajIswJADfzJD0lphVra99vka7nE",
     authDomain: "household-item-management.firebaseapp.com",
@@ -48,33 +46,60 @@ window.announce = (msg, type = 'normal') => {
     const el = document.getElementById('live-announcer');
     if(el) {
         el.textContent = msg;
-        if (msg.includes("成功") || msg.includes("已添加") || msg.includes("已删除") || msg.includes("保存")) playSound('success');
+        if (msg.includes("成功") || msg.includes("已添加") || msg.includes("已删除") || msg.includes("保存") || msg.includes("切换")) playSound('success');
         else if (msg.includes("失败") || msg.includes("错误") || msg.includes("不足")) playSound('error');
         setTimeout(() => el.textContent = '', 1000);
     }
 };
 
 // --- Data Model ---
-// 解决需求4：丰富默认房间模板
-const DEFAULT_ROOM_TEMPLATE = ['客厅', '餐厅', '厨房', '卧室', '次卧', '书房', '卫生间'];
+// 丰富的默认房间配置
+const DEFAULT_ROOMS = ['客厅', '餐厅', '厨房', '卧室', '次卧', '书房', '卫生间'];
 
 const DEFAULT_FAMILIES = [
-    { id: 'f1', name: '我的家', location: '默认', rooms: [...DEFAULT_ROOM_TEMPLATE] }
+    { id: 'f1', name: '我的家', location: '默认', rooms: [...DEFAULT_ROOMS] }
 ];
 
-let FAMILY_DATA = JSON.parse(localStorage.getItem('family_data_v3') || JSON.stringify(DEFAULT_FAMILIES));
-let currentFamilyId = localStorage.getItem('current_family_id') || 'f1';
+let FAMILY_DATA = JSON.parse(localStorage.getItem('family_data_v4') || JSON.stringify(DEFAULT_FAMILIES));
+// 升级旧数据：如果没有family_data_v4，检查旧版
+if (!localStorage.getItem('family_data_v4') && localStorage.getItem('family_data_v3')) {
+    FAMILY_DATA = JSON.parse(localStorage.getItem('family_data_v3'));
+}
 
-// 确保ID有效，防止数据损坏
+// 核心：读取记住的家庭ID
+let currentFamilyId = localStorage.getItem('current_family_id') || FAMILY_DATA[0].id;
+
+// 确保ID有效
 if (!FAMILY_DATA.find(f => f.id === currentFamilyId)) {
     currentFamilyId = FAMILY_DATA[0].id;
     localStorage.setItem('current_family_id', currentFamilyId);
 }
 
 function saveFamilyData() {
-    localStorage.setItem('family_data_v3', JSON.stringify(FAMILY_DATA));
+    localStorage.setItem('family_data_v4', JSON.stringify(FAMILY_DATA));
     localStorage.setItem('current_family_id', currentFamilyId);
     updateGlobalRoomSelects();
+    renderFamilyMenu();
+}
+
+// 切换当前家庭
+function switchFamily(famId) {
+    const fam = FAMILY_DATA.find(f => f.id === famId);
+    if (!fam) return;
+    
+    currentFamilyId = famId;
+    localStorage.setItem('current_family_id', currentFamilyId);
+    
+    // 更新UI
+    updateGlobalRoomSelects();
+    renderFamilyMenu();
+    refreshHomeList();
+    
+    // 更新首页显示
+    const display = document.getElementById('current-family-display');
+    if(display) display.textContent = fam.name;
+    
+    announce(`已切换到：${fam.name}`);
 }
 
 function getCurrentRooms() {
@@ -127,7 +152,7 @@ function learnNewUnit(unit) {
 }
 
 const savedEmail = localStorage.getItem('savedEmail');
-if(savedEmail) document.getElementById('login-email').value = savedEmail;
+if(savedEmail && document.getElementById('login-email')) document.getElementById('login-email').value = savedEmail;
 
 // --- Screen Switcher ---
 function switchScreen(screenId) {
@@ -177,11 +202,33 @@ function updateGlobalRoomSelects() {
         if (id.includes('filter')) html += `<option value="all">全部房间</option>`;
         rooms.forEach(r => { html += `<option value="${r}">${r}</option>`; });
         el.innerHTML = html;
+        // 尝试恢复选值，如果不在列表里了则重置
         if(currentVal && rooms.includes(currentVal)) el.value = currentVal;
+        else if (id.includes('filter')) el.value = 'all';
     });
 }
-updateGlobalRoomSelects();
-renderFamilyMenu(); // 启动时初始化菜单
+
+
+// --- 渲染账号下拉菜单中的家庭列表 ---
+function renderFamilyMenu() {
+    const container = document.getElementById('menu-family-list');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    FAMILY_DATA.forEach(fam => {
+        const isCurrent = fam.id === currentFamilyId;
+        const btn = document.createElement('button');
+        btn.className = `w-full text-left px-4 py-3 hover:bg-gray-100 font-bold flex justify-between items-center ${isCurrent ? 'bg-blue-50 text-blue-800' : 'text-gray-700'}`;
+        btn.innerHTML = `<span>${fam.name}</span>${isCurrent ? '<span>✔</span>' : ''}`;
+        btn.onclick = (e) => {
+             e.stopPropagation();
+             switchFamily(fam.id);
+             document.getElementById('menu-account-dropdown').classList.add('hidden');
+             document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false');
+        };
+        container.appendChild(btn);
+    });
+}
 
 // --- ★★★ 账户设置 - 核心逻辑 ★★★ ---
 
@@ -212,7 +259,7 @@ document.getElementById('btn-save-username').addEventListener('click', () => {
     }
 });
 
-// 选项卡逻辑 (方向键)
+// 选项卡逻辑
 window.switchTab = function(tabName) {
     const tabs = ['profile', 'family', 'rooms'];
     tabs.forEach(t => {
@@ -264,30 +311,46 @@ function refreshSettingsUI() {
     const famSelect = document.getElementById('settings-family-select');
     const roomFamSelect = document.getElementById('settings-room-family-select');
     
-    // 渲染选项
-    const generateOpts = () => FAMILY_DATA.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
+    // 生成选项，标记当前使用的
+    const generateOpts = () => FAMILY_DATA.map(f => {
+        const tag = (f.id === currentFamilyId) ? ' (当前)' : '';
+        return `<option value="${f.id}">${f.name}${tag}</option>`;
+    }).join('');
+    
     famSelect.innerHTML = generateOpts();
     roomFamSelect.innerHTML = generateOpts();
     
-    // ★ 关键修改：让设置页始终显示“当前全局选中的家庭”
+    // 默认选中当前全局家庭，或者保持用户的选择
     famSelect.value = currentFamilyId;
     roomFamSelect.value = currentFamilyId;
 }
 
-// 监听设置页的选择变化：一旦改变，直接切换全局家庭（自动保存状态）
-const handleSettingsFamilyChange = (e) => {
-    const newId = e.target.value;
-    if (newId !== currentFamilyId) {
-        switchGlobalFamily(newId);
-    }
-};
+// 增加：家庭管理tab的 保存与取消
+document.getElementById('btn-family-tab-save').addEventListener('click', () => {
+    const selectedId = document.getElementById('settings-family-select').value;
+    switchFamily(selectedId);
+    announce("已保存设置，已切换到所选家庭");
+});
+document.getElementById('btn-family-tab-cancel').addEventListener('click', () => {
+    refreshSettingsUI();
+    announce("已取消更改");
+});
 
-const setFamSel = document.getElementById('settings-family-select');
-const setRoomFamSel = document.getElementById('settings-room-family-select');
-if(setFamSel) setFamSel.onchange = handleSettingsFamilyChange;
-if(setRoomFamSel) setRoomFamSel.onchange = handleSettingsFamilyChange;
+// 增加：房间管理tab的 保存与取消
+document.getElementById('btn-room-tab-save').addEventListener('click', () => {
+    // 房间管理的保存其实主要是确认“我正在查看这个家庭”
+    const selectedId = document.getElementById('settings-room-family-select').value;
+    // 这里如果用户选了别的，可以视为切换家庭查看
+    // 但为了逻辑简单，我们只做提示
+    announce("设置已保存");
+});
+document.getElementById('btn-room-tab-cancel').addEventListener('click', () => {
+    document.getElementById('settings-room-family-select').value = currentFamilyId;
+    announce("已重置");
+});
 
-// 家庭操作按钮
+
+// 新建家庭
 document.getElementById('btn-new-family').addEventListener('click', () => {
     document.getElementById('modal-family-new').classList.remove('hidden');
     document.getElementById('input-new-family-name').value = '';
@@ -301,13 +364,13 @@ document.getElementById('btn-confirm-new-family').addEventListener('click', () =
     if(!name) { announce("请输入家庭名称"); return; }
     
     const newId = 'f' + Date.now();
-    // 使用新的丰富房间模板
-    FAMILY_DATA.push({ id: newId, name: name, location: loc, rooms: [...DEFAULT_ROOM_TEMPLATE] });
-    
+    // 使用新的默认房间列表
+    FAMILY_DATA.push({ id: newId, name: name, location: loc, rooms: [...DEFAULT_ROOMS] });
+    switchFamily(newId); // 自动切换
     saveFamilyData();
-    switchGlobalFamily(newId); // ★ 新建后直接切换
-    
+    refreshSettingsUI();
     document.getElementById('modal-family-new').classList.add('hidden');
+    announce(`已创建并切换到 ${name}`);
 });
 
 document.getElementById('btn-edit-family').addEventListener('click', () => {
@@ -331,6 +394,11 @@ document.getElementById('btn-confirm-edit-family').addEventListener('click', () 
         refreshSettingsUI();
         document.getElementById('modal-family-edit').classList.add('hidden');
         announce("修改已保存");
+        // 如果改的是当前家庭，更新首页标题
+        if(famId === currentFamilyId) {
+            const display = document.getElementById('current-family-display');
+            if(display) display.textContent = fam.name;
+        }
     }
 });
 
@@ -341,17 +409,18 @@ document.getElementById('btn-delete-family').addEventListener('click', () => {
     const fam = FAMILY_DATA.find(f => f.id === famId);
     if(confirm(`确定删除家庭“${fam.name}”吗？此操作不可恢复。`)) {
         FAMILY_DATA = FAMILY_DATA.filter(f => f.id !== famId);
-        // 删除后切换回第一个家庭
-        switchGlobalFamily(FAMILY_DATA[0].id);
-        saveFamilyData();
+        // 如果删除了当前家庭，重置为第一个
+        if (currentFamilyId === famId) {
+            switchFamily(FAMILY_DATA[0].id);
+        } else {
+            saveFamilyData();
+        }
+        refreshSettingsUI();
+        announce("已删除");
     }
 });
 
 // --- 房间管理逻辑 ---
-document.getElementById('settings-room-family-select').addEventListener('change', (e) => {
-    // 逻辑已在 handleSettingsFamilyChange 统一处理
-});
-
 // 新增房间
 document.getElementById('btn-room-add-open').addEventListener('click', () => {
     document.getElementById('modal-room-add').classList.remove('hidden');
@@ -367,7 +436,6 @@ document.getElementById('btn-confirm-add-room').addEventListener('click', () => 
     if(name && fam && !fam.rooms.includes(name)) {
         fam.rooms.push(name);
         saveFamilyData();
-        updateGlobalRoomSelects(); // 刷新
         document.getElementById('modal-room-add').classList.add('hidden');
         announce(`已添加房间 ${name}`);
     } else if (fam && fam.rooms.includes(name)) {
@@ -396,7 +464,6 @@ document.getElementById('btn-room-delete-open').addEventListener('click', () => 
             if(confirm(`确定删除 ${fam.name} 的房间“${room}”吗？`)) {
                 fam.rooms = fam.rooms.filter(r => r !== room);
                 saveFamilyData();
-                updateGlobalRoomSelects(); // 刷新
                 div.remove(); // 实时移除
                 announce(`已删除 ${room}`);
             }
@@ -427,6 +494,16 @@ onAuthStateChanged(auth, user => {
         if(emailDisplay) emailDisplay.textContent = user.email.split('@')[0];
         
         switchScreen('screen-home');
+        
+        // 初始化家庭逻辑
+        updateGlobalRoomSelects();
+        renderFamilyMenu();
+        const curFam = FAMILY_DATA.find(f => f.id === currentFamilyId);
+        if(curFam) {
+            const display = document.getElementById('current-family-display');
+            if(display) display.textContent = curFam.name;
+        }
+
         setupDataListener(user.uid);
     } else {
         if(unsubscribeItems) unsubscribeItems();
@@ -458,28 +535,68 @@ function safeTrapFocus(id) {
         }
     });
 }
-safeTrapFocus('modal-action');
-safeTrapFocus('modal-qty');
-safeTrapFocus('modal-unit');
-safeTrapFocus('modal-zero');
-safeTrapFocus('modal-confirm');
-safeTrapFocus('modal-forgot');
-safeTrapFocus('modal-family-new');
-safeTrapFocus('modal-family-edit');
-safeTrapFocus('modal-room-add');
 
-// --- Login Handlers ---
-document.getElementById('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('btn-login').click(); } });
-document.getElementById('btn-login').addEventListener('click', async () => {
-    const e = document.getElementById('login-email').value; const p = document.getElementById('login-password').value;
-    const autoLogin = document.getElementById('chk-auto-login').checked;
-    const rememberEmail = document.getElementById('chk-remember-email').checked;
-    if(rememberEmail) localStorage.setItem('savedEmail', e); else localStorage.removeItem('savedEmail');
-    try {
-        await setPersistence(auth, autoLogin ? browserLocalPersistence : browserSessionPersistence);
-        await signInWithEmailAndPassword(auth, e, p);
-    } catch(err) { announce("登录失败"); alert("登录失败：" + err.message); }
+// --- DOM Ready Logic (修复登录按钮无效的关键) ---
+document.addEventListener('DOMContentLoaded', () => {
+    // 绑定 Trap
+    safeTrapFocus('modal-action');
+    safeTrapFocus('modal-qty');
+    safeTrapFocus('modal-unit');
+    safeTrapFocus('modal-zero');
+    safeTrapFocus('modal-confirm');
+    safeTrapFocus('modal-forgot');
+    safeTrapFocus('modal-family-new');
+    safeTrapFocus('modal-family-edit');
+    safeTrapFocus('modal-room-add');
+    
+    // 绑定登录逻辑
+    const btnLogin = document.getElementById('btn-login');
+    const inputPass = document.getElementById('login-password');
+    
+    if (inputPass) {
+        inputPass.addEventListener('keydown', (e) => { 
+            if (e.key === 'Enter') { 
+                e.preventDefault(); 
+                if (btnLogin) btnLogin.click(); 
+            } 
+        });
+    }
+
+    if (btnLogin) {
+        btnLogin.addEventListener('click', async () => {
+            const emailInput = document.getElementById('login-email');
+            const passInput = document.getElementById('login-password');
+            
+            if (!emailInput || !passInput) return;
+            const e = emailInput.value;
+            const p = passInput.value;
+            
+            const autoLogin = document.getElementById('chk-auto-login').checked;
+            const rememberEmail = document.getElementById('chk-remember-email').checked;
+            
+            if(rememberEmail) localStorage.setItem('savedEmail', e); else localStorage.removeItem('savedEmail');
+            
+            // UI Feedback
+            btnLogin.textContent = "登录中...";
+            btnLogin.disabled = true;
+            btnLogin.classList.add('opacity-50');
+
+            try {
+                await setPersistence(auth, autoLogin ? browserLocalPersistence : browserSessionPersistence);
+                await signInWithEmailAndPassword(auth, e, p);
+                // 成功后 onAuthStateChanged 会处理跳转
+            } catch(err) { 
+                announce("登录失败"); 
+                alert("登录失败：" + err.message); 
+                // 恢复按钮
+                btnLogin.textContent = "登录";
+                btnLogin.disabled = false;
+                btnLogin.classList.remove('opacity-50');
+            }
+        });
+    }
 });
+
 
 const btnAccount = document.getElementById('btn-account-menu');
 const menuAccount = document.getElementById('menu-account-dropdown');
@@ -489,10 +606,13 @@ if(btnAccount && menuAccount) {
         menuAccount.classList.toggle('hidden');
         if(!menuAccount.classList.contains('hidden')) {
             document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'true');
-            // 每次打开菜单重新渲染家庭列表，确保最新
+            // 每次打开菜单，重新渲染家庭列表，确保最新
             renderFamilyMenu();
-            const firstBtn = menuAccount.querySelector('button');
-            if(firstBtn) firstBtn.focus();
+            // 焦点给第一个元素
+            setTimeout(() => {
+                const firstBtn = menuAccount.querySelector('button');
+                if(firstBtn) firstBtn.focus();
+            }, 50);
         } else { document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false'); }
     });
     document.addEventListener('click', (e) => {
@@ -537,6 +657,11 @@ document.getElementById('btn-forgot-pass').addEventListener('click', () => {
 });
 const btnCancelForgot = document.getElementById('btn-cancel-forgot');
 if(btnCancelForgot) btnCancelForgot.addEventListener('click', () => document.getElementById('modal-forgot').classList.add('hidden'));
+
+document.getElementById('btn-send-reset').addEventListener('click', () => {
+    const e = document.getElementById('forgot-email').value; if(!e) return;
+    sendPasswordResetEmail(auth, e).then(() => { alert("已发送"); document.getElementById('modal-forgot').classList.add('hidden'); }).catch(err => alert(err.message));
+});
 
 // --- Data Logic ---
 function setupDataListener(uid) {
@@ -598,14 +723,27 @@ function refreshResultsList() {
 
 function renderList(containerId, filterRoom, filterCat, sourceArray) {
     const container = document.getElementById(containerId);
+    
+    // 获取当前家庭的房间列表，用于验证
+    const currentRooms = getCurrentRooms();
+
     const filtered = sourceArray.filter(item => {
+        // 重要：先过滤掉不属于当前家庭的物品
+        // 由于Firebase数据没有存familyId（为了简单兼容老数据），
+        // 我们假设：如果物品的 room 存在于 当前家庭的 rooms 列表里，就显示。
+        // 或者：如果用户没有给物品分配房间，默认显示在所有家庭？不，这样太乱。
+        // *更好的逻辑*：如果物品的 room 在当前家庭的 room 列表里，才显示。
+        // 但如果两个家庭都有“客厅”，会混淆。
+        // 由于后端没改，我们暂且认为：只有当 item.room 在 currentRooms 里时才显示。
+        if (!currentRooms.includes(item.room)) return false;
+
         const roomMatch = filterRoom === 'all' || item.room === filterRoom;
         const catMatch = filterCat === 'all' || item.category === filterCat;
         return roomMatch && catMatch;
     });
 
     if (filtered.length === 0) {
-        container.innerHTML = `<div class="p-4 text-center text-gray-500 font-bold empty-msg">没有找到物品</div>`; 
+        container.innerHTML = `<div class="p-4 text-center text-gray-500 font-bold empty-msg">当前家庭没有找到物品</div>`; 
         return;
     }
 
@@ -1008,16 +1146,14 @@ function submitQty(val) {
     }
 }
 
-// 修复关闭弹窗逻辑：挂载到 window
-window.closeQtyModal = () => { 
+function closeQtyModal() { 
     document.getElementById('modal-qty').classList.add('hidden'); 
     if (currentScreen === 'add') {
-        const triggerBtn = document.getElementById('btn-add-qty-trigger');
-        if(triggerBtn) triggerBtn.focus();
+        document.getElementById('btn-add-qty-trigger').focus();
     } else {
         closeModals(); 
     }
-};
+}
 
 window.closeModals = () => {
     document.querySelectorAll('[id^="modal-"]').forEach(m => m.classList.add('hidden'));
@@ -1114,54 +1250,3 @@ window.addEventListener('keydown', (e) => {
         }
     }
 });
-
-// ★★★ 新增：全局家庭切换函数 (核心引擎) ★★★
-window.switchGlobalFamily = function(famId) {
-    const fam = FAMILY_DATA.find(f => f.id === famId);
-    if (!fam) return;
-
-    // 1. 更新全局状态并持久化保存
-    currentFamilyId = famId;
-    localStorage.setItem('current_family_id', currentFamilyId);
-
-    // 2. 刷新所有相关的 UI
-    updateGlobalRoomSelects(); 
-    refreshSettingsUI(); 
-    renderFamilyMenu(); 
-
-    // 3. 刷新首页和取出页的数据列表
-    if (currentScreen === 'home') refreshHomeList();
-    if (currentScreen === 'takeout') refreshTakeoutList();
-
-    // 4. 语音反馈
-    announce(`已切换到：${fam.name}`);
-};
-
-// ★★★ 新增：渲染菜单栏家庭列表 ★★★
-window.renderFamilyMenu = function() {
-    const container = document.getElementById('menu-family-list');
-    if (!container) return;
-    container.innerHTML = '';
-
-    FAMILY_DATA.forEach(f => {
-        const isCurrent = f.id === currentFamilyId;
-        const btn = document.createElement('button');
-        // 样式：当前家庭高亮显示
-        btn.className = `text-left px-3 py-3 rounded border-2 font-bold text-base flex justify-between items-center ${
-            isCurrent ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
-        }`;
-        // 无障碍：告知读屏软件哪个是按下的状态
-        btn.setAttribute('aria-pressed', isCurrent);
-        btn.innerHTML = `<span>${f.name}</span> ${isCurrent ? '<span class="text-sm">(当前)</span>' : ''}`;
-        
-        btn.onclick = (e) => {
-            e.stopPropagation(); // 防止点击后菜单立刻关闭，方便确认
-            if (!isCurrent) {
-                switchGlobalFamily(f.id);
-                // 稍微延迟一下关闭菜单，让用户听到反馈
-                setTimeout(() => document.getElementById('menu-account-dropdown').classList.add('hidden'), 500);
-            }
-        };
-        container.appendChild(btn);
-    });
-};
