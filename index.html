@@ -59,13 +59,18 @@
                         <span id="user-email-display">账号</span>
                         <span aria-hidden="true">▼</span>
                     </button>
-                    <div id="menu-account-dropdown" class="hidden absolute top-full right-0 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 text-gray-900 z-50 flex flex-col">
+<div id="menu-account-dropdown" class="hidden absolute top-full right-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-200 text-gray-900 z-50 flex flex-col">
+                        <div class="p-4 border-b border-gray-200 bg-blue-50">
+                            <p class="text-sm font-bold text-gray-500 mb-2" id="lbl-family-switch">切换当前家庭</p>
+                            <div id="menu-family-list" class="flex flex-col gap-2" role="group" aria-labelledby="lbl-family-switch">
+                                </div>
+                        </div>
+                        
                         <button id="btn-open-settings" class="w-full text-left px-4 py-4 hover:bg-gray-100 font-bold text-blue-800 border-b border-gray-200">账户设置</button>
                         <button id="btn-clear-data" class="w-full text-left px-4 py-4 hover:bg-red-50 text-red-700 font-bold border-b border-gray-200">清空所有数据</button>
                         <button id="btn-delete-account" class="w-full text-left px-4 py-4 hover:bg-red-50 text-red-700 font-bold border-b border-gray-200">注销账号</button>
                         <button id="btn-logout" class="w-full text-left px-4 py-4 hover:bg-gray-100 font-bold text-gray-800">退出登录</button>
                     </div>
-                </div>
                 <div class="flex gap-3">
                     <button id="btn-nav-add" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-4 rounded-lg shadow text-xl border-2 border-green-400">+ 新增物品</button>
                     <button id="btn-nav-takeout" class="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-lg shadow text-xl border-2 border-orange-400">取出物品</button>

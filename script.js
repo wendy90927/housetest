@@ -58,17 +58,7 @@ window.announce = (msg, type = 'normal') => {
     }
 };
 
-// --- Data Model ---
-const DEFAULT_FAMILIES = [
-    { id: 'f1', name: '家庭1', location: '默认', rooms: ['客厅', '厨房', '卧室', '书房', '餐厅', '玄关', '卫生间', '洗衣房'] },
-    { id: 'f2', name: '家庭2', location: '未设置', rooms: ['客厅', '卧室'] }
-];
-
-let FAMILY_DATA = JSON.parse(localStorage.getItem('family_data_v3') || JSON.stringify(DEFAULT_FAMILIES));
-let currentFamilyId = localStorage.getItem('current_family_id') || 'f1';
-
-// 确保ID有效
-if (!FAMILY_DATA.find(f => f.id === currentFamilyId)) currentFamilyId = FAMILY_DATA[0].id;
+renderFamilyMenu(); // 初始化家庭菜单
 
 function saveFamilyData() {
     localStorage.setItem('family_data_v3', JSON.stringify(FAMILY_DATA));
@@ -262,16 +252,32 @@ function refreshSettingsUI() {
     const famSelect = document.getElementById('settings-family-select');
     const roomFamSelect = document.getElementById('settings-room-family-select');
     
+    // 渲染选项
     const generateOpts = () => FAMILY_DATA.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
     famSelect.innerHTML = generateOpts();
     roomFamSelect.innerHTML = generateOpts();
     
-    // 恢复之前选中的家庭
-    if (FAMILY_DATA.find(f => f.id === currentFamilyId)) {
-        famSelect.value = currentFamilyId;
-        roomFamSelect.value = currentFamilyId;
-    }
+    // ★ 关键修改：让设置页始终显示“当前全局选中的家庭”
+    // 这样下次打开设置页时，位置就是正确的（解决需求1）
+    famSelect.value = currentFamilyId;
+    roomFamSelect.value = currentFamilyId;
 }
+
+// 监听设置页的选择变化：一旦改变，直接切换全局家庭（自动保存状态）
+// 这比手动的“保存”按钮更符合无障碍操作逻辑，确保“下次打开还在这个位置”
+const handleSettingsFamilyChange = (e) => {
+    const newId = e.target.value;
+    if (newId !== currentFamilyId) {
+        switchGlobalFamily(newId);
+    }
+};
+
+// 绑定监听器
+const setFamSel = document.getElementById('settings-family-select');
+const setRoomFamSel = document.getElementById('settings-room-family-select');
+// 先移除旧的监听器（如果有），防止重复绑定（虽然是module模式，但为了稳健）
+setFamSel.onchange = handleSettingsFamilyChange;
+setRoomFamSel.onchange = handleSettingsFamilyChange;
 
 // 家庭操作按钮
 document.getElementById('btn-new-family').addEventListener('click', () => {
@@ -287,12 +293,14 @@ document.getElementById('btn-confirm-new-family').addEventListener('click', () =
     if(!name) { announce("请输入家庭名称"); return; }
     
     const newId = 'f' + Date.now();
-    FAMILY_DATA.push({ id: newId, name: name, location: loc, rooms: ['客厅', '卧室'] });
-    currentFamilyId = newId; // 切换到新家
+    // 使用新的丰富房间模板（解决需求4）
+    FAMILY_DATA.push({ id: newId, name: name, location: loc, rooms: [...DEFAULT_ROOM_TEMPLATE] });
+    
     saveFamilyData();
-    refreshSettingsUI();
+    switchGlobalFamily(newId); // ★ 核心修改：新建后直接切换过去，首页和设置页同步更新（解决需求3）
+    
     document.getElementById('modal-family-new').classList.add('hidden');
-    announce(`已创建并切换到 ${name}`);
+    // switchGlobalFamily 会负责语音播报，这里不用重复
 });
 
 document.getElementById('btn-edit-family').addEventListener('click', () => {
@@ -1101,3 +1109,54 @@ window.addEventListener('keydown', (e) => {
         }
     }
 });
+
+// ★★★ 新增：全局家庭切换函数 (核心引擎) ★★★
+window.switchGlobalFamily = function(famId) {
+    const fam = FAMILY_DATA.find(f => f.id === famId);
+    if (!fam) return;
+
+    // 1. 更新全局状态并持久化保存 (解决需求1：确保下次打开停留在此)
+    currentFamilyId = famId;
+    localStorage.setItem('current_family_id', currentFamilyId);
+
+    // 2. 刷新所有相关的 UI
+    updateGlobalRoomSelects(); 
+    refreshSettingsUI(); 
+    renderFamilyMenu(); 
+
+    // 3. 刷新首页和取出页的数据列表 (解决需求2、3)
+    if (currentScreen === 'home') refreshHomeList();
+    if (currentScreen === 'takeout') refreshTakeoutList();
+
+    // 4. 语音反馈
+    announce(`已切换到：${fam.name}`);
+};
+
+// ★★★ 新增：渲染菜单栏家庭列表 (解决需求2) ★★★
+window.renderFamilyMenu = function() {
+    const container = document.getElementById('menu-family-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    FAMILY_DATA.forEach(f => {
+        const isCurrent = f.id === currentFamilyId;
+        const btn = document.createElement('button');
+        // 样式：当前家庭高亮显示
+        btn.className = `text-left px-3 py-3 rounded border-2 font-bold text-base flex justify-between items-center ${
+            isCurrent ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
+        }`;
+        // 无障碍：告知读屏软件哪个是按下的状态
+        btn.setAttribute('aria-pressed', isCurrent);
+        btn.innerHTML = `<span>${f.name}</span> ${isCurrent ? '<span class="text-sm">(当前)</span>' : ''}`;
+        
+        btn.onclick = (e) => {
+            e.stopPropagation(); // 防止点击后菜单立刻关闭，方便确认
+            if (!isCurrent) {
+                switchGlobalFamily(f.id);
+                // 稍微延迟一下关闭菜单，让用户听到反馈
+                setTimeout(() => document.getElementById('menu-account-dropdown').classList.add('hidden'), 500);
+            }
+        };
+        container.appendChild(btn);
+    });
+};
