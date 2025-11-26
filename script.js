@@ -17,6 +17,17 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const itemsRef = collection(db, "items");
 
+// --- 工具函数：防崩溃绑定 (核心修复) ---
+// 这个函数确保即使某个按钮ID写错了，也不会导致整个程序瘫痪
+function safeBind(id, event, handler) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.addEventListener(event, handler);
+    } else {
+        console.warn(`[SafeBind] 警告：找不到元素 ID "${id}"，跳过绑定。`);
+    }
+}
+
 // --- Audio Engine ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playSound(type) {
@@ -52,16 +63,103 @@ window.announce = (msg, type = 'normal') => {
     }
 };
 
-// --- Data Model ---
+// --- ★★★ 登录/注册逻辑 (移到最前，确保优先加载) ★★★ ---
+
+// 登录
+safeBind('login-password', 'keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('btn-login').click(); } });
+safeBind('btn-login', 'click', async () => {
+    const e = document.getElementById('login-email').value; 
+    const p = document.getElementById('login-password').value;
+    const autoLogin = document.getElementById('chk-auto-login').checked;
+    const rememberEmail = document.getElementById('chk-remember-email').checked;
+    if(rememberEmail) localStorage.setItem('savedEmail', e); else localStorage.removeItem('savedEmail');
+    try {
+        await setPersistence(auth, autoLogin ? browserLocalPersistence : browserSessionPersistence);
+        await signInWithEmailAndPassword(auth, e, p);
+    } catch(err) { announce("登录失败"); alert("登录失败：" + err.message); }
+});
+
+// 注册
+safeBind('btn-to-register', 'click', () => switchScreen('screen-register'));
+safeBind('btn-back-login', 'click', () => switchScreen('screen-login'));
+safeBind('btn-submit-reg', 'click', () => {
+    const e = document.getElementById('reg-email').value; 
+    const p1 = document.getElementById('reg-pass').value; 
+    const p2 = document.getElementById('reg-pass-confirm').value;
+    if (p1 !== p2 || p1.length < 6) { alert("密码不一致或太短"); return; }
+    createUserWithEmailAndPassword(auth, e, p1).catch(err => alert(err.message));
+});
+
+// 找回密码
+safeBind('btn-forgot-pass', 'click', () => {
+    document.getElementById('modal-forgot').classList.remove('hidden'); 
+    setTimeout(() => {
+        const title = document.getElementById('title-forgot');
+        if(title) title.focus();
+    }, 100);
+});
+safeBind('btn-cancel-forgot', 'click', () => document.getElementById('modal-forgot').classList.add('hidden'));
+safeBind('btn-send-reset', 'click', () => {
+    const e = document.getElementById('forgot-email').value; if(!e) return;
+    sendPasswordResetEmail(auth, e).then(() => { alert("已发送"); document.getElementById('modal-forgot').classList.add('hidden'); }).catch(err => alert(err.message));
+});
+
+// 账户菜单
+const btnAccount = document.getElementById('btn-account-menu');
+const menuAccount = document.getElementById('menu-account-dropdown');
+if(btnAccount && menuAccount) {
+    btnAccount.addEventListener('click', (e) => {
+        e.stopPropagation(); playSound('click');
+        menuAccount.classList.toggle('hidden');
+        if(!menuAccount.classList.contains('hidden')) {
+            btnAccount.setAttribute('aria-expanded', 'true');
+            const firstBtn = menuAccount.querySelector('button');
+            if(firstBtn) firstBtn.focus();
+        } else { btnAccount.setAttribute('aria-expanded', 'false'); }
+    });
+    document.addEventListener('click', (e) => {
+        if (!btnAccount.contains(e.target) && !menuAccount.contains(e.target)) {
+            menuAccount.classList.add('hidden');
+            btnAccount.setAttribute('aria-expanded', 'false');
+        }
+    });
+}
+
+safeBind('btn-logout', 'click', () => signOut(auth).then(() => announce("已退出")));
+safeBind('btn-clear-data', 'click', () => {
+    menuAccount.classList.add('hidden');
+    openGenericConfirm("确定清空数据？", async () => {
+        const batch = writeBatch(db);
+        const q = query(itemsRef, where("uid", "==", auth.currentUser.uid));
+        const snapshot = await getDocs(q);
+        snapshot.forEach(doc => batch.delete(doc.ref));
+        await batch.commit(); announce("已清空");
+    });
+});
+safeBind('btn-delete-account', 'click', () => {
+    menuAccount.classList.add('hidden');
+    openGenericConfirm("确定删除账号？", async () => {
+        const batch = writeBatch(db);
+        const q = query(itemsRef, where("uid", "==", auth.currentUser.uid));
+        const snapshot = await getDocs(q);
+        snapshot.forEach(doc => batch.delete(doc.ref));
+        await batch.commit(); await deleteUser(auth.currentUser);
+    });
+});
+
+// --- Data Model (家庭/房间) ---
 const DEFAULT_FAMILIES = [
-    { id: 'f1', name: '家庭1', location: '默认', rooms: ['客厅', '厨房', '卧室', '书房', '餐厅', '玄关', '卫生间', '洗衣房'] },
-    { id: 'f2', name: '家庭2', location: '未设置', rooms: ['客厅', '卧室'] }
+    { id: 'f1', name: '家庭1', location: '默认', rooms: ['客厅', '厨房', '卧室', '书房', '餐厅', '玄关', '卫生间', '洗衣房'] }
 ];
 
-let FAMILY_DATA = JSON.parse(localStorage.getItem('family_data_v3') || JSON.stringify(DEFAULT_FAMILIES));
-let currentFamilyId = localStorage.getItem('current_family_id') || 'f1';
+let FAMILY_DATA;
+try {
+    FAMILY_DATA = JSON.parse(localStorage.getItem('family_data_v3') || JSON.stringify(DEFAULT_FAMILIES));
+} catch (e) {
+    FAMILY_DATA = JSON.parse(JSON.stringify(DEFAULT_FAMILIES));
+}
 
-// 确保ID有效
+let currentFamilyId = localStorage.getItem('current_family_id') || 'f1';
 if (!FAMILY_DATA.find(f => f.id === currentFamilyId)) currentFamilyId = FAMILY_DATA[0].id;
 
 function saveFamilyData() {
@@ -89,6 +187,8 @@ let previousScreen = 'home';
 let focusTargetId = null; 
 let searchResults = [];
 let pendingTags = []; 
+let roomToDelete = null;
+let editingFamilyId = null;
 
 // 自动推断规则
 const INFERENCE_RULES = {
@@ -120,7 +220,10 @@ function learnNewUnit(unit) {
 }
 
 const savedEmail = localStorage.getItem('savedEmail');
-if(savedEmail) document.getElementById('login-email').value = savedEmail;
+if(savedEmail) {
+    const el = document.getElementById('login-email');
+    if(el) el.value = savedEmail;
+}
 
 // --- Screen Switcher ---
 function switchScreen(screenId) {
@@ -179,15 +282,22 @@ updateGlobalRoomSelects();
 
 const btnOpenSettings = document.getElementById('btn-open-settings');
 function openSettingsAction() {
-    document.getElementById('menu-account-dropdown').classList.add('hidden');
+    const menu = document.getElementById('menu-account-dropdown');
+    if(menu) menu.classList.add('hidden');
+    
     switchScreen('screen-settings');
+    
     if (auth.currentUser) {
-        document.getElementById('settings-email-display').textContent = auth.currentUser.email;
+        const display = document.getElementById('settings-email-display');
+        if(display) display.textContent = auth.currentUser.email;
+        
         const savedName = localStorage.getItem('user_nickname');
-        document.getElementById('profile-username').value = savedName || auth.currentUser.email;
+        const nameInput = document.getElementById('profile-username');
+        if(nameInput) nameInput.value = savedName || auth.currentUser.email;
     }
     switchTab('profile');
 }
+
 if(btnOpenSettings) {
     btnOpenSettings.addEventListener('click', (e) => { e.stopPropagation(); openSettingsAction(); });
     btnOpenSettings.addEventListener('keydown', (e) => {
@@ -196,7 +306,7 @@ if(btnOpenSettings) {
 }
 
 // 保存用户名
-document.getElementById('btn-save-username').addEventListener('click', () => {
+safeBind('btn-save-username', 'click', () => {
     const newName = document.getElementById('profile-username').value.trim();
     if(newName) {
         localStorage.setItem('user_nickname', newName);
@@ -246,19 +356,22 @@ if(tabList) {
         }
     });
 }
-document.getElementById('tab-btn-profile').addEventListener('click', () => switchTab('profile'));
-document.getElementById('tab-btn-family').addEventListener('click', () => switchTab('family'));
-document.getElementById('tab-btn-rooms').addEventListener('click', () => switchTab('rooms'));
-document.getElementById('btn-back-settings').addEventListener('click', () => switchScreen('screen-home'));
+safeBind('tab-btn-profile', 'click', () => switchTab('profile'));
+safeBind('tab-btn-family', 'click', () => switchTab('family'));
+safeBind('tab-btn-rooms', 'click', () => switchTab('rooms'));
+safeBind('btn-back-settings', 'click', () => switchScreen('screen-home'));
 
 // --- 家庭管理逻辑 ---
 function refreshSettingsUI() {
     const famSelect = document.getElementById('settings-family-select');
     const roomFamSelect = document.getElementById('settings-room-family-select');
     
+    if(!famSelect || !roomFamSelect) return;
+
     const generateOpts = () => FAMILY_DATA.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
-    famSelect.innerHTML = generateOpts();
-    roomFamSelect.innerHTML = generateOpts();
+    const html = generateOpts();
+    famSelect.innerHTML = html;
+    roomFamSelect.innerHTML = html;
     
     // 恢复之前选中的家庭
     if (FAMILY_DATA.find(f => f.id === currentFamilyId)) {
@@ -267,15 +380,15 @@ function refreshSettingsUI() {
     }
 }
 
-// 家庭操作按钮
-document.getElementById('btn-new-family').addEventListener('click', () => {
+// 1. 新建家庭
+safeBind('btn-new-family', 'click', () => {
     document.getElementById('modal-family-new').classList.remove('hidden');
     document.getElementById('input-new-family-name').value = '';
     document.getElementById('input-new-family-loc').value = '';
-    document.getElementById('title-family-new').focus();
+    setTimeout(() => document.getElementById('title-family-new').focus(), 100);
 });
 
-document.getElementById('btn-confirm-new-family').addEventListener('click', () => {
+safeBind('btn-confirm-new-family', 'click', () => {
     const name = document.getElementById('input-new-family-name').value.trim();
     const loc = document.getElementById('input-new-family-loc').value.trim();
     if(!name) { announce("请输入家庭名称"); return; }
@@ -289,7 +402,8 @@ document.getElementById('btn-confirm-new-family').addEventListener('click', () =
     announce(`已创建并切换到 ${name}`);
 });
 
-document.getElementById('btn-edit-family').addEventListener('click', () => {
+// 2. 编辑家庭
+safeBind('btn-edit-family', 'click', () => {
     const famId = document.getElementById('settings-family-select').value;
     const fam = FAMILY_DATA.find(f => f.id === famId);
     if(!fam) return;
@@ -297,10 +411,10 @@ document.getElementById('btn-edit-family').addEventListener('click', () => {
     document.getElementById('modal-family-edit').classList.remove('hidden');
     document.getElementById('input-edit-family-name').value = fam.name;
     document.getElementById('input-edit-family-loc').value = fam.location || '';
-    document.getElementById('title-family-edit').focus();
+    setTimeout(() => document.getElementById('title-family-edit').focus(), 100);
 });
 
-document.getElementById('btn-confirm-edit-family').addEventListener('click', () => {
+safeBind('btn-confirm-edit-family', 'click', () => {
     const famId = document.getElementById('settings-family-select').value;
     const fam = FAMILY_DATA.find(f => f.id === famId);
     if(fam) {
@@ -313,7 +427,8 @@ document.getElementById('btn-confirm-edit-family').addEventListener('click', () 
     }
 });
 
-document.getElementById('btn-delete-family').addEventListener('click', () => {
+// 3. 删除家庭
+safeBind('btn-delete-family', 'click', () => {
     const famId = document.getElementById('settings-family-select').value;
     if (FAMILY_DATA.length <= 1) { announce("至少保留一个家庭"); return; }
     
@@ -328,19 +443,18 @@ document.getElementById('btn-delete-family').addEventListener('click', () => {
 });
 
 // --- 房间管理逻辑 ---
-document.getElementById('settings-room-family-select').addEventListener('change', (e) => {
-    // 切换房间管理视角时，只更新本地UI，不改变全局 currentFamilyId，除非用户明确意图
-    // 这里为了简单，暂不自动切换全局ID，只用于展示
+safeBind('settings-room-family-select', 'change', (e) => {
+    // 切换房间管理视角
 });
 
 // 新增房间
-document.getElementById('btn-room-add-open').addEventListener('click', () => {
+safeBind('btn-room-add-open', 'click', () => {
     document.getElementById('modal-room-add').classList.remove('hidden');
     document.getElementById('input-new-room-name').value = '';
-    document.getElementById('title-room-add').focus();
+    setTimeout(() => document.getElementById('title-room-add').focus(), 100);
 });
 
-document.getElementById('btn-confirm-add-room').addEventListener('click', () => {
+safeBind('btn-confirm-add-room', 'click', () => {
     const name = document.getElementById('input-new-room-name').value.trim();
     const famId = document.getElementById('settings-room-family-select').value;
     const fam = FAMILY_DATA.find(f => f.id === famId);
@@ -356,7 +470,7 @@ document.getElementById('btn-confirm-add-room').addEventListener('click', () => 
 });
 
 // 删除房间 (独立页面)
-document.getElementById('btn-room-delete-open').addEventListener('click', () => {
+safeBind('btn-room-delete-open', 'click', () => {
     const famId = document.getElementById('settings-room-family-select').value;
     const fam = FAMILY_DATA.find(f => f.id === famId);
     if(!fam) return;
@@ -382,19 +496,18 @@ document.getElementById('btn-room-delete-open').addEventListener('click', () => 
         });
         container.appendChild(div);
     });
-    document.getElementById('title-room-list-delete').focus();
+    setTimeout(() => document.getElementById('title-room-list-delete').focus(), 100);
 });
 
-document.getElementById('btn-back-room-list').addEventListener('click', () => {
+safeBind('btn-back-room-list', 'click', () => {
     switchScreen('screen-settings');
-    // 保持在房间管理Tab
     switchTab('rooms');
 });
 
 // 模态框通用取消按钮
-document.getElementById('btn-cancel-new-family').addEventListener('click', () => document.getElementById('modal-family-new').classList.add('hidden'));
-document.getElementById('btn-cancel-edit-family').addEventListener('click', () => document.getElementById('modal-family-edit').classList.add('hidden'));
-document.getElementById('btn-cancel-add-room').addEventListener('click', () => document.getElementById('modal-room-add').classList.add('hidden'));
+safeBind('btn-cancel-new-family', 'click', () => document.getElementById('modal-family-new').classList.add('hidden'));
+safeBind('btn-cancel-edit-family', 'click', () => document.getElementById('modal-family-edit').classList.add('hidden'));
+safeBind('btn-cancel-add-room', 'click', () => document.getElementById('modal-room-add').classList.add('hidden'));
 
 
 // --- Auth & Init ---
@@ -447,447 +560,92 @@ safeTrapFocus('modal-family-new');
 safeTrapFocus('modal-family-edit');
 safeTrapFocus('modal-room-add');
 
-// --- Login Handlers ---
-document.getElementById('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('btn-login').click(); } });
-document.getElementById('btn-login').addEventListener('click', async () => {
-    const e = document.getElementById('login-email').value; const p = document.getElementById('login-password').value;
-    const autoLogin = document.getElementById('chk-auto-login').checked;
-    const rememberEmail = document.getElementById('chk-remember-email').checked;
-    if(rememberEmail) localStorage.setItem('savedEmail', e); else localStorage.removeItem('savedEmail');
-    try {
-        await setPersistence(auth, autoLogin ? browserLocalPersistence : browserSessionPersistence);
-        await signInWithEmailAndPassword(auth, e, p);
-    } catch(err) { announce("登录失败"); alert("登录失败：" + err.message); }
-});
-
-const btnAccount = document.getElementById('btn-account-menu');
-const menuAccount = document.getElementById('menu-account-dropdown');
-if(btnAccount && menuAccount) {
-    btnAccount.addEventListener('click', (e) => {
-        e.stopPropagation(); playSound('click');
-        menuAccount.classList.toggle('hidden');
-        if(!menuAccount.classList.contains('hidden')) {
-            document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'true');
-            const firstBtn = menuAccount.querySelector('button');
-            if(firstBtn) firstBtn.focus();
-        } else { document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false'); }
-    });
-    document.addEventListener('click', (e) => {
-        if (!btnAccount.contains(e.target) && !menuAccount.contains(e.target)) {
-            menuAccount.classList.add('hidden');
-            document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false');
-        }
-    });
-}
-
-document.getElementById('btn-logout').addEventListener('click', () => signOut(auth).then(() => announce("已退出")));
-document.getElementById('btn-clear-data').addEventListener('click', () => {
-    menuAccount.classList.add('hidden');
-    openGenericConfirm("确定清空数据？", async () => {
-        const batch = writeBatch(db);
-        const q = query(itemsRef, where("uid", "==", auth.currentUser.uid));
-        const snapshot = await getDocs(q);
-        snapshot.forEach(doc => batch.delete(doc.ref));
-        await batch.commit(); announce("已清空");
-    });
-});
-document.getElementById('btn-delete-account').addEventListener('click', () => {
-    menuAccount.classList.add('hidden');
-    openGenericConfirm("确定删除账号？", async () => {
-        const batch = writeBatch(db);
-        const q = query(itemsRef, where("uid", "==", auth.currentUser.uid));
-        const snapshot = await getDocs(q);
-        snapshot.forEach(doc => batch.delete(doc.ref));
-        await batch.commit(); await deleteUser(auth.currentUser);
-    });
-});
-
-document.getElementById('btn-to-register').addEventListener('click', () => switchScreen('screen-register'));
-document.getElementById('btn-back-login').addEventListener('click', () => switchScreen('screen-login'));
-document.getElementById('btn-submit-reg').addEventListener('click', () => {
-    const e = document.getElementById('reg-email').value; const p1 = document.getElementById('reg-pass').value; const p2 = document.getElementById('reg-pass-confirm').value;
-    if (p1 !== p2 || p1.length < 6) { alert("密码问题"); return; }
-    createUserWithEmailAndPassword(auth, e, p1).catch(err => alert(err.message));
-});
-document.getElementById('btn-forgot-pass').addEventListener('click', () => {
-    document.getElementById('modal-forgot').classList.remove('hidden'); setTimeout(() => document.getElementById('title-forgot').focus(), 100);
-});
-const btnCancelForgot = document.getElementById('btn-cancel-forgot');
-if(btnCancelForgot) btnCancelForgot.addEventListener('click', () => document.getElementById('modal-forgot').classList.add('hidden'));
-
-document.getElementById('btn-send-reset').addEventListener('click', () => {
-    const e = document.getElementById('forgot-email').value; if(!e) return;
-    sendPasswordResetEmail(auth, e).then(() => { alert("已发送"); document.getElementById('modal-forgot').classList.add('hidden'); }).catch(err => alert(err.message));
-});
-
-// --- Data Logic ---
-function setupDataListener(uid) {
-    if(unsubscribeItems) unsubscribeItems();
-    const q = query(itemsRef, where("uid", "==", uid));
-    unsubscribeItems = onSnapshot(q, snap => {
-        let isFirstLoad = allItems.length === 0;
-        snap.docChanges().forEach(change => {
-            const data = { id: change.doc.id, ...change.doc.data() };
-            if (!data.category) data.category = '其他杂项';
-            if (!data.tags) data.tags = [];
-
-            if (change.type === "added") {
-                if (isFirstLoad) allItems.push(data); else allItems.unshift(data); 
-            }
-            if (change.type === "modified") {
-                const idx = allItems.findIndex(i => i.id === data.id);
-                if (idx > -1) allItems[idx] = data;
-            }
-            if (change.type === "removed") {
-                allItems = allItems.filter(i => i.id !== data.id);
-            }
-        });
-        
-        allItems.sort((a, b) => {
-            const timeA = a.updatedAt ? a.updatedAt.toMillis() : Date.now() + 10000;
-            const timeB = b.updatedAt ? b.updatedAt.toMillis() : Date.now() + 10000;
-            return timeB - timeA;
-        });
-        
-        if (currentScreen === 'home') refreshHomeList();
-        if (currentScreen === 'takeout') refreshTakeoutList();
-        if (currentScreen === 'results') refreshResultsList();
-    });
-}
-
-// --- List Renderers ---
-function refreshHomeList() { 
-    const catSelect = document.getElementById('home-filter-cat');
-    if (catSelect.value !== homeFilterCategory) { catSelect.value = homeFilterCategory; }
-    renderList('home-list', homeFilterRoom, homeFilterCategory, allItems); 
-}
-
-function refreshTakeoutList() { 
-    const catSelect = document.getElementById('takeout-filter-cat');
-    if (catSelect.value !== takeoutFilterCategory) { catSelect.value = takeoutFilterCategory; }
-    renderList('takeout-list', takeoutFilterRoom, takeoutFilterCategory, allItems); 
-}
-
-function refreshResultsList() {
-    const term = document.getElementById('title-results').dataset.term || '';
-    searchResults = allItems.filter(item => {
-        const searchStr = `${item.name} ${item.location||''} ${item.category} ${item.tags.join(' ')}`.toLowerCase();
-        return searchStr.includes(term);
-    });
-    renderList('results-list', 'all', 'all', searchResults);
-    updateStats(searchResults);
-}
-
-function renderList(containerId, filterRoom, filterCat, sourceArray) {
-    const container = document.getElementById(containerId);
-    const filtered = sourceArray.filter(item => {
-        const roomMatch = filterRoom === 'all' || item.room === filterRoom;
-        const catMatch = filterCat === 'all' || item.category === filterCat;
-        return roomMatch && catMatch;
-    });
-
-    if (filtered.length === 0) {
-        container.innerHTML = `<div class="p-4 text-center text-gray-500 font-bold empty-msg">没有找到物品</div>`; 
-        return;
-    }
-
-    const emptyMsg = container.querySelector('.empty-msg') || container.querySelector('.text-center.text-gray-500');
-    if (emptyMsg) emptyMsg.remove();
-
-    const existingMap = new Map();
-    container.querySelectorAll('.item-card').forEach(el => existingMap.set(el.dataset.id, el));
-    existingMap.forEach((el, id) => { if (!filtered.find(i => i.id === id)) el.remove(); });
-
-    filtered.forEach(item => {
-        let card = existingMap.get(item.id);
-        let tagsHtml = '';
-        if (item.tags && item.tags.length > 0) {
-            tagsHtml = `<div class="mt-2 flex flex-wrap gap-1">` + 
-                item.tags.map(t => `<span class="px-2 py-0.5 bg-blue-100 text-blue-800 text-sm font-bold rounded-full border border-blue-200">${t}</span>`).join('') +
-                `</div>`;
-        }
-        const tagsText = item.tags && item.tags.length > 0 ? `，标签：${item.tags.join('、')}` : '';
-
-        const labelText = `${item.name}，分类：${item.category}，位于${item.room} ${item.location||''}，数量${item.quantity}${item.unit||'个'}${tagsText}`;
-        
-        const htmlContent = `
-            <div class="flex flex-col gap-1 pointer-events-none">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <h3 class="text-xl font-bold text-gray-900 item-name flex items-center gap-2">
-                            ${item.name}
-                            <span class="text-sm font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded border border-gray-300">${item.category}</span>
-                        </h3>
-                        <p class="text-base text-gray-600 font-bold item-loc mt-1">${item.room} - ${item.location || '位置未填'}</p>
-                    </div>
-                    <div class="text-3xl font-bold text-blue-700 item-qty whitespace-nowrap">${item.quantity} <span class="text-lg text-gray-500">${item.unit||'个'}</span></div>
-                </div>
-                ${tagsHtml}
-            </div>
-        `;
-        
-        if (card) {
-            if (card.getAttribute('aria-label') !== labelText) {
-                card.innerHTML = htmlContent; card.setAttribute('aria-label', labelText);
-            }
-        } else {
-            card = document.createElement('div');
-            card.className = "item-card bg-white p-4 rounded-lg shadow border-l-8 border-blue-500 cursor-pointer relative mb-3 transition-transform";
-            card.setAttribute('role', 'button'); card.setAttribute('tabindex', '0'); card.dataset.id = item.id; card.setAttribute('aria-label', labelText); card.innerHTML = htmlContent;
-            const triggerMenu = () => openActionMenu(item);
-            card.addEventListener('click', triggerMenu);
-            card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); triggerMenu(); } });
-            container.appendChild(card);
-        }
-    });
-    
-    if (focusTargetId) {
-        const target = container.querySelector(`[data-id="${focusTargetId}"]`);
-        if (target) { target.focus(); focusTargetId = null; }
-    }
-}
-
-function updateStats(items) {
-    const statsContainer = document.getElementById('results-stats');
-    if (items.length > 0) {
-        const totals = {};
-        items.forEach(item => { const u = item.unit || '个'; totals[u] = (totals[u] || 0) + item.quantity; });
-        const summaryText = Object.entries(totals).map(([u, q]) => `${q} ${u}`).join('、');
-        statsContainer.textContent = `共找到 ${items.length} 处。合计：${summaryText}`;
-    } else {
-        statsContainer.textContent = "未找到相关物品";
-    }
-}
-
-// --- Filters ---
-document.getElementById('home-filter').addEventListener('change', (e) => { homeFilterRoom = e.target.value; refreshHomeList(); });
-document.getElementById('home-filter-cat').addEventListener('change', (e) => { homeFilterCategory = e.target.value; refreshHomeList(); });
-document.getElementById('takeout-filter').addEventListener('change', (e) => { takeoutFilterRoom = e.target.value; refreshTakeoutList(); });
-document.getElementById('takeout-filter-cat').addEventListener('change', (e) => { takeoutFilterCategory = e.target.value; refreshTakeoutList(); });
-
-// --- Search Logic ---
-const setupSearch = (inputId, btnId, clearBtnId, context) => {
-    const input = document.getElementById(inputId);
-    const btn = document.getElementById(btnId);
-    const clearBtn = document.getElementById(clearBtnId);
-    const toggleClear = () => { if (input.value.length > 0) clearBtn.classList.remove('hidden'); else clearBtn.classList.add('hidden'); };
-    input.addEventListener('input', toggleClear);
-    clearBtn.addEventListener('click', () => { input.value = ''; toggleClear(); input.focus(); });
-    const perform = () => {
-        const term = input.value.trim().toLowerCase();
-        if (!term) return;
-        playSound('click');
-        const title = document.getElementById('title-results');
-        title.textContent = `搜索：${term}`;
-        title.dataset.term = term;
-        document.getElementById('btn-back-results').dataset.return = context;
-        switchScreen('screen-results');
-        refreshResultsList();
-        announce(`搜索完成`);
-    };
-    btn.addEventListener('click', perform);
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') perform(); });
-};
-setupSearch('home-search', 'btn-do-search', 'btn-clear-home-search', 'home');
-setupSearch('takeout-search', 'btn-do-search-takeout', 'btn-clear-takeout-search', 'takeout');
-document.getElementById('btn-back-results').addEventListener('click', (e) => {
-    const ctx = e.target.dataset.return || 'home';
-    document.getElementById('home-search').value = ''; document.getElementById('takeout-search').value = '';
-    document.getElementById('btn-clear-home-search').classList.add('hidden'); document.getElementById('btn-clear-takeout-search').classList.add('hidden');
-    switchScreen(ctx === 'takeout' ? 'screen-takeout' : 'screen-home');
-});
-
-// --- Tag Management Logic ---
-function addTag(tagText, containerId, inputId) {
-    const cleanTag = tagText.trim();
-    if(!cleanTag) return;
-    if(pendingTags.includes(cleanTag)) {
-        announce(`标签 ${cleanTag} 已存在`);
-        return;
-    }
-    pendingTags.push(cleanTag);
-    renderTags(containerId, inputId);
-    document.getElementById(inputId).value = '';
-    announce(`已添加标签 ${cleanTag}`);
-}
-
-function removeTag(tagText, containerId, inputId) {
-    pendingTags = pendingTags.filter(t => t !== tagText);
-    renderTags(containerId, inputId);
-    announce(`已删除标签 ${tagText}`);
-    document.getElementById(inputId).focus(); 
-}
-
-function renderTags(containerId, inputId) {
-    const container = document.getElementById(containerId);
-    container.innerHTML = '';
-    pendingTags.forEach(tag => {
-        const bubble = document.createElement('span');
-        bubble.className = 'tag-bubble';
-        bubble.innerHTML = `${tag} <span class="tag-remove" role="button" tabindex="0" aria-label="删除标签 ${tag}">×</span>`;
-        const delBtn = bubble.querySelector('.tag-remove');
-        const delHandler = (e) => { 
-            e.stopPropagation(); 
-            if(e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
-            removeTag(tag, containerId, inputId); 
-        };
-        delBtn.addEventListener('click', delHandler);
-        delBtn.addEventListener('keydown', delHandler);
-        container.appendChild(bubble);
-    });
-}
-
-function setupTagInput(inputId, btnId, containerId) {
-    const input = document.getElementById(inputId);
-    const btn = document.getElementById(btnId);
-    const handler = () => addTag(input.value, containerId, inputId);
-    btn.addEventListener('click', handler);
-    input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); handler(); }
-    });
-}
-setupTagInput('add-tags-input', 'btn-add-tag-trigger', 'add-tags-container');
-setupTagInput('edit-tags-input', 'btn-edit-tag-trigger', 'edit-tags-container');
-
-// --- Auto Inference ---
-function attemptInference(name) {
-    if(!name) return;
-    let predictedCat = null;
-    let predictedTags = [];
-    let predictedUnit = null;
-    const historyMatch = allItems.find(i => i.name === name);
-    if (historyMatch) {
-        predictedCat = historyMatch.category;
-        predictedTags = [...(historyMatch.tags || [])];
-        predictedUnit = historyMatch.unit;
-    } else {
-        for (const [cat, keywords] of Object.entries(INFERENCE_RULES)) {
-            if (keywords.some(k => name.includes(k))) { predictedCat = cat; break; }
-        }
-        for (const [key, tags] of Object.entries(TAG_SUGGESTIONS)) {
-            if (name.includes(key)) { tags.forEach(t => { if(!predictedTags.includes(t)) predictedTags.push(t); }); }
-        }
-    }
-    if (predictedCat) {
-        document.getElementById('add-category').value = predictedCat;
-        announce(`已自动选择分类：${predictedCat}`);
-    }
-    if (predictedTags.length > 0) {
-        pendingTags = [...new Set([...pendingTags, ...predictedTags])];
-        renderTags('add-tags-container', 'add-tags-input');
-        announce(`已自动填入 ${predictedTags.length} 个标签`);
-    }
-    if (predictedUnit && !document.getElementById('add-unit').value) {
-        document.getElementById('add-unit').value = predictedUnit;
-    }
-}
-document.getElementById('add-name').addEventListener('blur', (e) => attemptInference(e.target.value.trim()));
-
-// --- Navigation Handlers ---
-document.getElementById('btn-nav-takeout').addEventListener('click', () => switchScreen('screen-takeout'));
-document.getElementById('btn-back-takeout').addEventListener('click', () => switchScreen('screen-home'));
-
-function updateAddQtyDisplay() {
-    const btn = document.getElementById('btn-add-qty-trigger');
-    btn.textContent = `当前选择：${pendingAddQty} (点击修改)`;
-    btn.setAttribute('aria-label', `当前数量 ${pendingAddQty}，点击修改`);
-}
-
-document.getElementById('btn-nav-add').addEventListener('click', () => { 
+// --- Navigation Handlers (Add, Edit, Data) ---
+safeBind('btn-nav-takeout', 'click', () => switchScreen('screen-takeout'));
+safeBind('btn-back-takeout', 'click', () => switchScreen('screen-home'));
+safeBind('btn-nav-add', 'click', () => { 
     switchScreen('screen-add'); 
-    document.getElementById('add-name').focus(); 
+    const nameInput = document.getElementById('add-name');
+    if(nameInput) nameInput.focus();
     pendingAddQty = 1; 
     pendingTags = []; 
     renderTags('add-tags-container', 'add-tags-input');
     updateAddQtyDisplay(); 
 });
+safeBind('btn-back-add', 'click', () => switchScreen('screen-home'));
+safeBind('btn-nav-data', 'click', () => switchScreen('screen-data'));
+safeBind('btn-back-data', 'click', () => switchScreen('screen-home'));
 
-document.getElementById('btn-back-add').addEventListener('click', () => switchScreen('screen-home'));
-document.getElementById('btn-nav-data').addEventListener('click', () => switchScreen('screen-data'));
-document.getElementById('btn-back-data').addEventListener('click', () => switchScreen('screen-home'));
+function updateAddQtyDisplay() {
+    const btn = document.getElementById('btn-add-qty-trigger');
+    if(btn) {
+        btn.textContent = `当前选择：${pendingAddQty} (点击修改)`;
+        btn.setAttribute('aria-label', `当前数量 ${pendingAddQty}，点击修改`);
+    }
+}
 
-document.getElementById('btn-add-qty-trigger').addEventListener('click', () => {
+safeBind('btn-add-qty-trigger', 'click', () => {
     openQtyPicker("初始数量", (val) => {
         pendingAddQty = val;
         updateAddQtyDisplay();
     });
 });
 
-document.getElementById('form-add').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const name = document.getElementById('add-name').value.trim();
-    if(!name) return;
-    
-    try {
-        await addDoc(itemsRef, {
-            name: name,
-            category: document.getElementById('add-category').value,
-            tags: pendingTags,
-            unit: document.getElementById('add-unit').value,
-            room: document.getElementById('add-room').value,
-            location: document.getElementById('add-location').value,
-            quantity: pendingAddQty,
-            uid: auth.currentUser.uid,
-            updatedAt: serverTimestamp()
-        });
-        announce("添加成功");
-        document.getElementById('form-add').reset();
-        pendingAddQty = 1;
-        pendingTags = [];
-        renderTags('add-tags-container', 'add-tags-input');
-        updateAddQtyDisplay();
-        document.getElementById('add-name').focus();
-    } catch(err) {
-        announce("添加失败");
-        console.error(err);
-    }
-});
+// Add Form Submit
+const formAdd = document.getElementById('form-add');
+if(formAdd) {
+    formAdd.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const nameInput = document.getElementById('add-name');
+        const name = nameInput.value.trim();
+        if(!name) return;
+        try {
+            await addDoc(itemsRef, {
+                name: name,
+                category: document.getElementById('add-category').value,
+                tags: pendingTags,
+                unit: document.getElementById('add-unit').value,
+                room: document.getElementById('add-room').value,
+                location: document.getElementById('add-location').value,
+                quantity: pendingAddQty,
+                uid: auth.currentUser.uid,
+                updatedAt: serverTimestamp()
+            });
+            announce("添加成功");
+            formAdd.reset();
+            pendingAddQty = 1;
+            pendingTags = [];
+            renderTags('add-tags-container', 'add-tags-input');
+            updateAddQtyDisplay();
+            nameInput.focus();
+        } catch(err) {
+            announce("添加失败");
+            console.error(err);
+        }
+    });
+}
+safeBind('btn-cancel-add', 'click', () => { switchScreen('screen-home'); announce("已取消"); });
 
-document.getElementById('btn-cancel-add').addEventListener('click', () => {
-    switchScreen('screen-home');
-    announce("已取消");
-});
-
+// Edit Logic
 function cancelEdit() {
     playSound('click');
     if(currentActionItem) focusTargetId = currentActionItem.id;
     switchScreen('screen-' + previousScreen);
 }
-document.getElementById('btn-back-edit').addEventListener('click', cancelEdit);
-document.getElementById('btn-cancel-edit-form').addEventListener('click', cancelEdit);
+safeBind('btn-back-edit', 'click', cancelEdit);
+safeBind('btn-cancel-edit-form', 'click', cancelEdit);
 
-// Unit Picker
-let unitTargetInput = null;
-const unitGrid = document.getElementById('unit-grid');
-function initUnitGrid() {
-    unitGrid.innerHTML = '';
-    UNIT_LIST.forEach(u => {
-        const btn = document.createElement('button');
-        btn.className = 'grid-btn'; btn.textContent = u;
-        btn.addEventListener('click', () => {
-            if(unitTargetInput) { unitTargetInput.value = u; announce(`已选择 ${u}`); unitTargetInput.focus(); }
-            closeUnitModal();
-        });
-        unitGrid.appendChild(btn);
+const formEdit = document.getElementById('form-edit');
+if(formEdit) {
+    formEdit.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const newQty = parseInt(document.getElementById('edit-quantity').value);
+        const unitVal = document.getElementById('edit-unit').value;
+        learnNewUnit(unitVal);
+        if (newQty === 0) { openZeroConfirmEdit(newQty); return; }
+        await executeEdit(newQty);
     });
 }
-window.openUnitPicker = (inputId) => {
-    playSound('click'); unitTargetInput = document.getElementById(inputId); initUnitGrid(); 
-    document.getElementById('modal-unit').classList.remove('hidden'); document.getElementById('unit-title').focus();
-};
-window.closeUnitModal = () => { document.getElementById('modal-unit').classList.add('hidden'); if(unitTargetInput) unitTargetInput.focus(); };
-document.getElementById('btn-pick-unit-add').addEventListener('click', () => openUnitPicker('add-unit'));
-document.getElementById('btn-pick-unit-edit').addEventListener('click', () => openUnitPicker('edit-unit'));
-
-// Edit Execution
-document.getElementById('form-edit').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const newQty = parseInt(document.getElementById('edit-quantity').value);
-    const unitVal = document.getElementById('edit-unit').value;
-    learnNewUnit(unitVal);
-    if (newQty === 0) { openZeroConfirmEdit(newQty); return; }
-    await executeEdit(newQty);
-});
 
 async function executeEdit(newQty) {
     focusTargetId = currentActionItem.id; 
@@ -908,11 +666,37 @@ async function executeEdit(newQty) {
 }
 
 function openZeroConfirmEdit(newQty) {
-    const m = document.getElementById('modal-zero'); playSound('error'); m.classList.remove('hidden'); setTimeout(() => document.getElementById('title-zero').focus(), 100);
+    const m = document.getElementById('modal-zero'); playSound('error'); m.classList.remove('hidden'); 
+    setTimeout(() => document.getElementById('title-zero').focus(), 100);
+    
     document.getElementById('btn-zero-keep').onclick = async () => { m.classList.add('hidden'); await executeEdit(0); };
     document.getElementById('btn-zero-del').onclick = async () => { m.classList.add('hidden'); await execDelete(); switchScreen('screen-' + previousScreen); };
     document.getElementById('btn-zero-cancel').onclick = () => { m.classList.add('hidden'); announce("已取消"); };
 }
+
+// Unit Picker Logic
+let unitTargetInput = null;
+const unitGrid = document.getElementById('unit-grid');
+function initUnitGrid() {
+    unitGrid.innerHTML = '';
+    UNIT_LIST.forEach(u => {
+        const btn = document.createElement('button');
+        btn.className = 'grid-btn'; btn.textContent = u;
+        btn.addEventListener('click', () => {
+            if(unitTargetInput) { unitTargetInput.value = u; announce(`已选择 ${u}`); unitTargetInput.focus(); }
+            closeUnitModal();
+        });
+        unitGrid.appendChild(btn);
+    });
+}
+window.openUnitPicker = (inputId) => {
+    playSound('click'); unitTargetInput = document.getElementById(inputId); initUnitGrid(); 
+    document.getElementById('modal-unit').classList.remove('hidden'); document.getElementById('unit-title').focus();
+};
+window.closeUnitModal = () => { document.getElementById('modal-unit').classList.add('hidden'); if(unitTargetInput) unitTargetInput.focus(); };
+safeBind('btn-pick-unit-add', 'click', () => openUnitPicker('add-unit'));
+safeBind('btn-pick-unit-edit', 'click', () => openUnitPicker('edit-unit'));
+safeBind('btn-unit-cancel', 'click', closeUnitModal);
 
 // Action Menu
 function openActionMenu(item) {
@@ -935,6 +719,7 @@ document.getElementById('action-buttons-container').addEventListener('click', (e
     if (act === 'delete') openGenericConfirm(`确定删除 ${currentActionItem.name} 吗？`, execDelete);
     if (act === 'edit') openEditScreen(currentActionItem);
 });
+safeBind('btn-act-cancel', 'click', closeModals);
 
 function openEditScreen(item) {
     document.getElementById('modal-action').classList.add('hidden');
@@ -952,7 +737,7 @@ function openEditScreen(item) {
     renderTags('edit-tags-container', 'edit-tags-input');
 }
 
-// Qty Picker (Fixed Focus Logic)
+// Qty Picker
 let qtyCallback = null;
 const qtyGrid = document.getElementById('qty-grid');
 qtyGrid.innerHTML = '';
@@ -969,31 +754,27 @@ function openQtyPicker(title, cb) {
     input.value = ''; input.disabled = true; confirm.disabled = true; confirm.classList.add('opacity-50'); confirm.setAttribute('tabindex', '-1'); trigger.setAttribute('tabindex', '0');
     setTimeout(() => { qtyGrid.firstChild.focus(); announce("请选择数量"); }, 100);
 }
-const customTrigger = document.getElementById('qty-custom-trigger');
-function activateInput() {
+safeBind('qty-custom-trigger', 'click', () => {
     const input = document.getElementById('qty-custom-input'); const confirm = document.getElementById('btn-qty-confirm'); const trigger = document.getElementById('qty-custom-trigger');
     trigger.setAttribute('tabindex', '-1'); input.disabled = false; input.focus(); confirm.disabled = false; confirm.classList.remove('opacity-50'); confirm.setAttribute('tabindex', '0'); announce("请输入数字");
-}
-customTrigger.addEventListener('click', activateInput);
-customTrigger.addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.keyCode === 13) { e.preventDefault(); e.stopPropagation(); activateInput(); } });
-document.getElementById('qty-custom-input').addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.keyCode === 13) { e.preventDefault(); e.stopPropagation(); submitQty(parseInt(e.target.value)); } });
-document.getElementById('btn-qty-confirm').addEventListener('click', () => { submitQty(parseInt(document.getElementById('qty-custom-input').value)); });
+});
+safeBind('btn-qty-confirm', 'click', () => submitQty(parseInt(document.getElementById('qty-custom-input').value)));
+safeBind('btn-qty-cancel', 'click', closeQtyModal);
 
 function submitQty(val) { 
     if (!val || val <= 0) { announce("无效数量"); return; } 
     if (qtyCallback) qtyCallback(val); 
     document.getElementById('modal-qty').classList.add('hidden');
     if (currentScreen === 'add') {
-        document.getElementById('btn-add-qty-trigger').focus();
+        const t = document.getElementById('btn-add-qty-trigger'); if(t) t.focus();
     } else {
         closeModals();
     }
 }
-
 function closeQtyModal() { 
     document.getElementById('modal-qty').classList.add('hidden'); 
     if (currentScreen === 'add') {
-        document.getElementById('btn-add-qty-trigger').focus();
+        const t = document.getElementById('btn-add-qty-trigger'); if(t) t.focus();
     } else {
         closeModals(); 
     }
@@ -1036,61 +817,21 @@ function openGenericConfirm(msg, cb) {
     document.getElementById('modal-action').classList.add('hidden'); const m = document.getElementById('modal-confirm'); playSound('error');
     m.classList.remove('hidden'); document.getElementById('confirm-text').textContent = msg; confirmCallback = cb; setTimeout(() => document.getElementById('title-confirm').focus(), 100);
 }
-document.getElementById('btn-confirm-ok').addEventListener('click', () => { if(confirmCallback) confirmCallback(); document.getElementById('modal-confirm').classList.add('hidden'); });
-document.getElementById('btn-confirm-cancel').addEventListener('click', () => closeModals());
+safeBind('btn-confirm-ok', 'click', () => { if(confirmCallback) confirmCallback(); document.getElementById('modal-confirm').classList.add('hidden'); });
+safeBind('btn-confirm-cancel', 'click', closeModals);
 async function execDelete() { try { await deleteDoc(doc(db, "items", currentActionItem.id)); announce("已删除"); closeModals(); } catch(e) { announce("删除失败"); } }
 
-// Export/Import
-document.getElementById('btn-export').addEventListener('click', () => {
-    let csvContent = "\uFEFF物品名称,分类,标签,房间,具体位置,数量,单位\n"; 
-    allItems.forEach(item => { 
-        const tagsStr = (item.tags || []).join(';');
-        csvContent += `${item.name},${item.category},${tagsStr},${item.room},${item.location || ''},${item.quantity},${item.unit||'个'}\n`; 
-    });
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `物品备份_${new Date().toISOString().slice(0,10)}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); announce("导出成功");
-});
-document.getElementById('btn-download-template').addEventListener('click', () => {
-    const csvContent = "\uFEFF物品名称(必填),分类,标签(用分号隔开),房间(必填),具体位置,数量(数字),单位\n大米,食品饮料,粮食;主食,厨房,米桶,1,袋\n洗发水,个人护理,洗护;日常,卫生间,架子,1,瓶"; 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `导入模板.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); announce("模板下载成功");
-});
-document.getElementById('btn-trigger-upload').addEventListener('click', () => document.getElementById('file-upload').click());
-document.getElementById('file-upload').addEventListener('change', (e) => {
-    const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
-    reader.onload = async (e) => {
-        const text = e.target.result; const rows = text.split('\n'); let count = 0;
-        for (let i = 1; i < rows.length; i++) {
-            const row = rows[i].trim(); if (!row) continue; const cols = row.split(','); if (cols.length < 1) continue; const name = cols[0]?.trim(); if(!name) continue;
-            
-            const cat = cols[1]?.trim() || '其他杂项';
-            const tagStr = cols[2]?.trim() || '';
-            const tags = tagStr ? tagStr.split(';').map(t => t.trim()).filter(t=>t) : [];
-
-            await addDoc(itemsRef, { 
-                name: name, 
-                category: cat,
-                tags: tags,
-                room: cols[3]?.trim() || '客厅', 
-                location: cols[4]?.trim() || '', 
-                quantity: parseInt(cols[5]) || 1, 
-                unit: cols[6]?.trim() || '个', 
-                uid: auth.currentUser.uid, 
-                updatedAt: serverTimestamp() 
-            }); count++;
-        } announce(`导入 ${count} 个物品`); switchScreen('screen-home');
-    }; reader.readAsText(file);
+// Search
+setupSearch('home-search', 'btn-do-search', 'btn-clear-home-search', 'home');
+setupSearch('takeout-search', 'btn-do-search-takeout', 'btn-clear-takeout-search', 'takeout');
+safeBind('btn-back-results', 'click', (e) => {
+    const ctx = e.target.dataset.return || 'home';
+    document.getElementById('home-search').value = ''; document.getElementById('takeout-search').value = '';
+    document.getElementById('btn-clear-home-search').classList.add('hidden'); document.getElementById('btn-clear-takeout-search').classList.add('hidden');
+    switchScreen(ctx === 'takeout' ? 'screen-takeout' : 'screen-home');
 });
 
-// Global Keydown
-window.addEventListener('keydown', (e) => {
-    if(e.key === 'Escape') {
-        if (currentScreen === 'edit') return; 
-        const menu = document.getElementById('menu-account-dropdown');
-        if (!menu.classList.contains('hidden')) { e.preventDefault(); menu.classList.add('hidden'); document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false'); document.getElementById('btn-account-menu').focus(); return; }
-        const modals = document.querySelectorAll('[id^="modal-"]:not(.hidden)'); if (modals.length > 0) { e.preventDefault(); closeModals(); document.getElementById('modal-qty').classList.add('hidden'); document.getElementById('modal-unit').classList.add('hidden'); document.getElementById('modal-family-new').classList.add('hidden'); document.getElementById('modal-family-edit').classList.add('hidden'); document.getElementById('modal-room-add').classList.add('hidden'); return; }
-        if (currentScreen !== 'home' && currentScreen !== 'login') { 
-            document.getElementById('home-search').value = ''; document.getElementById('takeout-search').value = '';
-            document.getElementById('btn-clear-home-search').classList.add('hidden'); document.getElementById('btn-clear-takeout-search').classList.add('hidden');
-            e.preventDefault(); switchScreen('screen-home'); 
-        }
-    }
-});
+// Tags
+setupTagInput('add-tags-input', 'btn-add-tag-trigger', 'add-tags-container');
+setupTagInput('edit-tags-input', 'btn-edit-tag-trigger', 'edit-tags-container');
+document.getElementById('add-name').addEventListener('blur', (e) => attemptInference(e.target.value.trim()));
