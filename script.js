@@ -17,7 +17,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const itemsRef = collection(db, "items");
 
-// --- Audio Engine (已静音化：仅保留操作反馈) ---
+// --- Audio Engine (静音优化版) ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playSound(type) {
     if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -42,18 +42,44 @@ function playSound(type) {
     }
 }
 
-// 语音播报：删除了大部分自动播报，仅保留关键操作反馈
 window.announce = (msg, type = 'normal') => {
     const el = document.getElementById('live-announcer');
     if(el) {
         el.textContent = msg;
-        if (msg.includes("成功") || msg.includes("已添加") || msg.includes("已删除")) playSound('success');
+        if (msg.includes("成功") || msg.includes("已添加") || msg.includes("已删除") || msg.includes("更新")) playSound('success');
         else if (msg.includes("失败") || msg.includes("错误") || msg.includes("不足")) playSound('error');
+        // 移除了进入界面的提示音
         setTimeout(() => el.textContent = '', 1000);
     }
 };
 
-// --- State ---
+// --- State & Data Model ---
+// 默认家庭数据结构
+const DEFAULT_FAMILIES = [
+    { id: 'f1', name: '家庭1', location: '默认位置', rooms: ['客厅', '厨房', '卧室', '书房', '餐厅', '玄关', '卫生间', '洗衣房'] }
+];
+
+// 从本地存储加载
+let FAMILY_DATA = JSON.parse(localStorage.getItem('family_data_v2') || JSON.stringify(DEFAULT_FAMILIES));
+let currentFamilyId = localStorage.getItem('current_family_id') || 'f1';
+
+// 确保当前ID有效
+if (!FAMILY_DATA.find(f => f.id === currentFamilyId)) currentFamilyId = FAMILY_DATA[0].id;
+
+// 获取当前家庭的房间列表 (用于全局下拉菜单)
+function getCurrentRooms() {
+    const fam = FAMILY_DATA.find(f => f.id === currentFamilyId);
+    return fam ? fam.rooms : [];
+}
+
+// 保存数据
+function saveFamilyData() {
+    localStorage.setItem('family_data_v2', JSON.stringify(FAMILY_DATA));
+    localStorage.setItem('current_family_id', currentFamilyId);
+    updateGlobalRoomSelects(); // 数据变更时刷新所有下拉
+}
+
+// 其他状态
 let allItems = [];
 let currentActionItem = null;
 let pendingAddQty = 1;
@@ -67,15 +93,8 @@ let previousScreen = 'home';
 let focusTargetId = null; 
 let searchResults = [];
 let pendingTags = []; 
-
-// 房间管理状态
-let ROOM_LIST = ['客厅', '厨房', '卧室', '书房', '餐厅', '玄关', '卫生间', '洗衣房'];
-// 从本地存储加载自定义房间
-const savedRooms = JSON.parse(localStorage.getItem('custom_rooms') || '[]');
-if (savedRooms.length > 0) ROOM_LIST = savedRooms;
-
-// 家庭管理状态 (模拟)
-let FAMILY_LIST = ['家庭1'];
+let roomToDelete = null; // 暂存要删除的房间信息
+let editingFamilyId = null; // 暂存正在编辑的家庭ID
 
 // 自动推断规则
 const INFERENCE_RULES = {
@@ -107,10 +126,7 @@ function learnNewUnit(unit) {
 }
 
 const savedEmail = localStorage.getItem('savedEmail');
-if(savedEmail) {
-    const emailInput = document.getElementById('login-email');
-    if(emailInput) emailInput.value = savedEmail;
-}
+if(savedEmail) document.getElementById('login-email').value = savedEmail;
 
 // --- Screen Switcher ---
 function switchScreen(screenId) {
@@ -121,13 +137,9 @@ function switchScreen(screenId) {
 
     document.querySelectorAll('.screen').forEach(el => el.classList.add('hidden'));
     const target = document.getElementById(screenId);
-    if (!target) { 
-        console.error("Screen not found:", screenId); 
-        return; 
-    } 
+    if (!target) { console.error("Screen not found:", screenId); return; } 
     target.classList.remove('hidden');
     
-    // 更新状态
     if (screenId === 'screen-home') currentScreen = 'home';
     else if (screenId === 'screen-takeout') currentScreen = 'takeout';
     else if (screenId === 'screen-results') currentScreen = 'results';
@@ -135,8 +147,10 @@ function switchScreen(screenId) {
     else if (screenId === 'screen-add') currentScreen = 'add';
     else if (screenId === 'screen-settings') {
         currentScreen = 'settings';
-        renderSettingsRoomList(); // 每次进入设置时刷新房间列表
+        refreshFamilyUI(); // 进入设置时刷新列表
+        refreshRoomManagementUI();
     }
+    else if (screenId === 'screen-room-delete') currentScreen = 'room-delete';
     else currentScreen = 'other';
     
     if (!focusTargetId) {
@@ -150,38 +164,60 @@ function switchScreen(screenId) {
     if(screenId === 'screen-takeout') refreshTakeoutList();
 }
 
-// --- ★★★ 账户设置模块 ★★★ ---
-const btnOpenSettings = document.getElementById('btn-open-settings');
+// --- Global Room Select Update ---
+function updateGlobalRoomSelects() {
+    const selects = ['add-room', 'edit-room', 'home-filter', 'takeout-filter'];
+    const rooms = getCurrentRooms();
+    
+    selects.forEach(id => {
+        const el = document.getElementById(id);
+        if(!el) return;
+        const currentVal = el.value;
+        let html = '';
+        if (id.includes('filter')) html += `<option value="all">全部房间</option>`;
+        
+        rooms.forEach(r => { html += `<option value="${r}">${r}</option>`; });
+        el.innerHTML = html;
+        if(currentVal && rooms.includes(currentVal)) el.value = currentVal;
+    });
+}
+// Init
+updateGlobalRoomSelects();
 
-// 1. 打开设置
+// --- ★★★ 账户设置 - 核心逻辑 ★★★ ---
+
+// 1. 打开逻辑
+const btnOpenSettings = document.getElementById('btn-open-settings');
 function openSettingsAction() {
-    const menu = document.getElementById('menu-account-dropdown');
-    if(menu) menu.classList.add('hidden');
-    
-    // 删除了这里的 announce 音效
+    document.getElementById('menu-account-dropdown').classList.add('hidden');
     switchScreen('screen-settings');
-    
     if (auth.currentUser) {
-        const display = document.getElementById('settings-email-display');
-        if(display) display.textContent = auth.currentUser.email;
-        const usernameInput = document.getElementById('profile-username');
-        if(usernameInput) usernameInput.value = auth.currentUser.email; // 预填充用户名
+        document.getElementById('settings-email-display').textContent = auth.currentUser.email;
+        // 加载用户名
+        const savedName = localStorage.getItem('user_nickname');
+        document.getElementById('profile-username').value = savedName || auth.currentUser.email;
     }
     switchTab('profile');
 }
-
 if (btnOpenSettings) {
     btnOpenSettings.addEventListener('click', (e) => { e.stopPropagation(); openSettingsAction(); });
     btnOpenSettings.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault(); e.stopPropagation(); openSettingsAction();
-        }
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openSettingsAction(); }
     });
 }
 
-// 2. 选项卡切换逻辑 (支持方向键)
+// 2. 个人资料 - 保存用户名
+document.getElementById('btn-save-username').addEventListener('click', () => {
+    const newName = document.getElementById('profile-username').value.trim();
+    if(newName) {
+        localStorage.setItem('user_nickname', newName);
+        announce("用户名已保存");
+    }
+});
+
+// 3. 选项卡逻辑 (支持方向键切换)
 window.switchTab = function(tabName) {
-    const tabs = ['profile', 'family', 'location'];
+    const tabs = ['profile', 'family', 'rooms'];
     tabs.forEach(t => {
         const btn = document.getElementById(`tab-btn-${t}`);
         const panel = document.getElementById(`panel-${t}`);
@@ -204,11 +240,10 @@ window.switchTab = function(tabName) {
     });
 }
 
-// 3. 选项卡键盘导航 (Left/Right)
 const tabList = document.querySelector('[role="tablist"]');
 if(tabList) {
     tabList.addEventListener('keydown', (e) => {
-        const tabs = ['profile', 'family', 'location'];
+        const tabs = ['profile', 'family', 'rooms'];
         const currentTab = document.querySelector('.tab-btn[aria-selected="true"]');
         if(!currentTab) return;
         
@@ -225,102 +260,217 @@ if(tabList) {
     });
 }
 
-const tabProfile = document.getElementById('tab-btn-profile');
-if(tabProfile) tabProfile.addEventListener('click', () => switchTab('profile'));
-
-const tabFamily = document.getElementById('tab-btn-family');
-if(tabFamily) tabFamily.addEventListener('click', () => switchTab('family'));
-
-const tabLocation = document.getElementById('tab-btn-location');
-if(tabLocation) tabLocation.addEventListener('click', () => switchTab('location'));
-
-const btnBackSettings = document.getElementById('btn-back-settings');
-if(btnBackSettings) btnBackSettings.addEventListener('click', () => switchScreen('screen-home'));
+document.getElementById('tab-btn-profile').addEventListener('click', () => switchTab('profile'));
+document.getElementById('tab-btn-family').addEventListener('click', () => switchTab('family'));
+document.getElementById('tab-btn-rooms').addEventListener('click', () => switchTab('rooms'));
+document.getElementById('btn-back-settings').addEventListener('click', () => switchScreen('screen-home'));
 
 // --- 家庭管理逻辑 ---
-const btnAddFamily = document.getElementById('btn-add-family');
-if(btnAddFamily) {
-    btnAddFamily.addEventListener('click', () => {
-        const name = document.getElementById('new-family-name').value.trim();
-        if(!name) { alert("请输入家庭名称"); return; }
-        // 简单添加到下拉列表 (暂不持久化到数据库)
-        const select = document.getElementById('family-select');
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        select.appendChild(opt);
-        select.value = name;
-        announce(`已创建并切换到 ${name}`);
-        document.getElementById('new-family-name').value = '';
-        document.getElementById('new-family-loc').value = '';
+function refreshFamilyUI() {
+    const container = document.getElementById('family-list-container');
+    container.innerHTML = '';
+    
+    FAMILY_DATA.forEach(fam => {
+        const div = document.createElement('div');
+        div.className = 'manage-item';
+        div.innerHTML = `
+            <div class="manage-info" tabindex="0">
+                ${fam.name} <span class="text-sm text-gray-500 font-normal">(${fam.location || '无位置'})</span>
+            </div>
+            <div class="manage-actions">
+                <button class="btn-icon-action btn-edit" aria-label="编辑 ${fam.name}">编辑</button>
+                <button class="btn-icon-action btn-delete" aria-label="删除 ${fam.name}">删除</button>
+            </div>
+        `;
+        
+        // Bind Edit
+        div.querySelector('.btn-edit').addEventListener('click', () => openEditFamilyModal(fam.id));
+        
+        // Bind Delete
+        div.querySelector('.btn-delete').addEventListener('click', () => {
+            if(FAMILY_DATA.length <= 1) { announce("至少保留一个家庭"); return; }
+            if(confirm(`确定删除家庭“${fam.name}”吗？此操作不可恢复。`)) {
+                FAMILY_DATA = FAMILY_DATA.filter(f => f.id !== fam.id);
+                saveFamilyData();
+                refreshFamilyUI();
+                announce("已删除");
+            }
+        });
+        
+        container.appendChild(div);
     });
 }
 
-// --- 房间管理逻辑 (核心) ---
-function renderSettingsRoomList() {
-    const list = document.getElementById('settings-room-list');
+document.getElementById('btn-add-family').addEventListener('click', () => {
+    const name = document.getElementById('new-family-name').value.trim();
+    const loc = document.getElementById('new-family-loc').value.trim();
+    if(!name) { announce("请输入名称"); return; }
+    
+    const newId = 'f' + Date.now();
+    FAMILY_DATA.push({
+        id: newId,
+        name: name,
+        location: loc,
+        rooms: ['客厅', '卧室'] // 默认房间
+    });
+    
+    saveFamilyData();
+    refreshFamilyUI();
+    document.getElementById('new-family-name').value = '';
+    document.getElementById('new-family-loc').value = '';
+    announce(`已添加家庭 ${name}`);
+});
+
+// --- 编辑家庭 Modal 逻辑 ---
+function openEditFamilyModal(famId) {
+    editingFamilyId = famId;
+    const fam = FAMILY_DATA.find(f => f.id === famId);
+    if(!fam) return;
+    
+    document.getElementById('modal-family-edit').classList.remove('hidden');
+    document.getElementById('input-edit-family-name').value = fam.name;
+    document.getElementById('input-edit-family-loc').value = fam.location || '';
+    refreshEditFamilyRooms(fam);
+    document.getElementById('title-family-edit').focus();
+}
+
+function refreshEditFamilyRooms(fam) {
+    const list = document.getElementById('list-family-rooms');
     list.innerHTML = '';
-    ROOM_LIST.forEach(room => {
+    fam.rooms.forEach(room => {
         const div = document.createElement('div');
-        div.className = 'settings-list-item';
-        div.innerHTML = `
-            <span>${room}</span>
-            <button class="settings-delete-btn" aria-label="删除 ${room}">删除</button>
-        `;
+        div.className = 'flex justify-between items-center p-2 bg-gray-50 border rounded mb-1';
+        div.innerHTML = `<span>${room}</span> <button class="text-red-600 font-bold px-2">×</button>`;
         div.querySelector('button').addEventListener('click', () => {
-            if(confirm(`确定删除房间“${room}”吗？`)) {
-                ROOM_LIST = ROOM_LIST.filter(r => r !== room);
-                updateRoomStorage();
-            }
+            fam.rooms = fam.rooms.filter(r => r !== room);
+            refreshEditFamilyRooms(fam);
         });
         list.appendChild(div);
     });
-    updateGlobalRoomSelects(); // 同时更新所有下拉菜单
 }
 
-function updateRoomStorage() {
-    localStorage.setItem('custom_rooms', JSON.stringify(ROOM_LIST));
-    renderSettingsRoomList();
-    announce("房间列表已更新");
-}
-
-document.getElementById('btn-add-room').addEventListener('click', () => {
-    const input = document.getElementById('new-room-input');
+document.getElementById('btn-family-add-room').addEventListener('click', () => {
+    const input = document.getElementById('input-family-new-room');
     const val = input.value.trim();
-    if(val && !ROOM_LIST.includes(val)) {
-        ROOM_LIST.push(val);
-        updateRoomStorage();
+    const fam = FAMILY_DATA.find(f => f.id === editingFamilyId);
+    if(val && fam && !fam.rooms.includes(val)) {
+        fam.rooms.push(val);
         input.value = '';
-    } else if (ROOM_LIST.includes(val)) {
-        announce("房间已存在");
+        refreshEditFamilyRooms(fam);
     }
 });
 
-// 全局更新所有房间下拉菜单 (筛选器、新增、编辑)
-function updateGlobalRoomSelects() {
-    const selects = ['add-room', 'edit-room', 'home-filter', 'takeout-filter'];
-    selects.forEach(id => {
-        const el = document.getElementById(id);
-        if(!el) return;
-        const currentVal = el.value; // 记住当前选中的值
-        
-        // 保留 "全部房间" 选项 (仅在筛选器中)
-        let html = '';
-        if (id.includes('filter')) {
-            html += `<option value="all">全部房间</option>`;
-        }
-        
-        ROOM_LIST.forEach(r => {
-            html += `<option value="${r}">${r}</option>`;
+document.getElementById('btn-save-family').addEventListener('click', () => {
+    const fam = FAMILY_DATA.find(f => f.id === editingFamilyId);
+    if(fam) {
+        fam.name = document.getElementById('input-edit-family-name').value;
+        fam.location = document.getElementById('input-edit-family-loc').value;
+        // rooms updated in real-time in memory object
+        saveFamilyData();
+        document.getElementById('modal-family-edit').classList.add('hidden');
+        refreshFamilyUI();
+        announce("修改已保存");
+    }
+});
+
+document.getElementById('btn-cancel-family-edit').addEventListener('click', () => {
+    document.getElementById('modal-family-edit').classList.add('hidden');
+    // Reload data from storage to revert unsaved room changes
+    FAMILY_DATA = JSON.parse(localStorage.getItem('family_data_v2'));
+});
+document.getElementById('btn-close-family-edit').addEventListener('click', () => {
+    document.getElementById('modal-family-edit').classList.add('hidden');
+    FAMILY_DATA = JSON.parse(localStorage.getItem('family_data_v2'));
+});
+
+// --- 房间管理逻辑 (独立Tab) ---
+function refreshRoomManagementUI() {
+    const select = document.getElementById('manage-room-family-select');
+    // 保存当前选中
+    const savedVal = select.value;
+    select.innerHTML = '';
+    
+    FAMILY_DATA.forEach(fam => {
+        const opt = document.createElement('option');
+        opt.value = fam.id;
+        opt.textContent = fam.name;
+        select.appendChild(opt);
+    });
+    
+    if(savedVal && FAMILY_DATA.find(f => f.id === savedVal)) {
+        select.value = savedVal;
+    } else {
+        select.value = currentFamilyId;
+    }
+    
+    renderManageRoomList(select.value);
+}
+
+document.getElementById('manage-room-family-select').addEventListener('change', (e) => {
+    renderManageRoomList(e.target.value);
+});
+
+function renderManageRoomList(famId) {
+    const fam = FAMILY_DATA.find(f => f.id === famId);
+    const list = document.getElementById('manage-room-list');
+    list.innerHTML = '';
+    
+    if(!fam) return;
+    
+    fam.rooms.forEach(room => {
+        const div = document.createElement('div');
+        div.className = 'manage-item';
+        div.innerHTML = `
+            <div class="manage-info">${room}</div>
+            <div class="manage-actions">
+                <button class="btn-icon-action btn-delete" aria-label="删除 ${room}">删除</button>
+            </div>
+        `;
+        div.querySelector('.btn-delete').addEventListener('click', () => {
+            openDeleteRoomScreen(room, famId);
         });
-        
-        el.innerHTML = html;
-        if(currentVal && ROOM_LIST.includes(currentVal)) el.value = currentVal;
+        list.appendChild(div);
     });
 }
 
-// 初始化时执行一次，确保下拉菜单有内容
-updateGlobalRoomSelects();
+document.getElementById('btn-manage-add-room').addEventListener('click', () => {
+    const input = document.getElementById('manage-new-room-input');
+    const val = input.value.trim();
+    const famId = document.getElementById('manage-room-family-select').value;
+    const fam = FAMILY_DATA.find(f => f.id === famId);
+    
+    if(val && fam && !fam.rooms.includes(val)) {
+        fam.rooms.push(val);
+        saveFamilyData();
+        renderManageRoomList(famId);
+        input.value = '';
+        announce(`已添加房间 ${val}`);
+    }
+});
+
+// --- 独立删除房间页面 ---
+function openDeleteRoomScreen(roomName, famId) {
+    roomToDelete = { room: roomName, familyId: famId };
+    switchScreen('screen-room-delete');
+    document.getElementById('room-delete-msg').textContent = `您确定要删除“${roomName}”吗？相关物品的位置信息可能需要更新。`;
+    document.getElementById('title-room-delete').focus();
+}
+
+document.getElementById('btn-confirm-delete-room').addEventListener('click', () => {
+    if(roomToDelete) {
+        const fam = FAMILY_DATA.find(f => f.id === roomToDelete.familyId);
+        if(fam) {
+            fam.rooms = fam.rooms.filter(r => r !== roomToDelete.room);
+            saveFamilyData();
+            announce("房间已删除");
+        }
+    }
+    switchScreen('screen-settings');
+});
+
+document.getElementById('btn-cancel-delete-room').addEventListener('click', () => {
+    switchScreen('screen-settings');
+});
 
 
 // --- Auth & Init ---
@@ -333,7 +483,6 @@ onAuthStateChanged(auth, user => {
         
         switchScreen('screen-home');
         setupDataListener(user.uid);
-        // 删除了系统就绪提示音
     } else {
         if(unsubscribeItems) unsubscribeItems();
         allItems = [];
@@ -370,6 +519,7 @@ safeTrapFocus('modal-unit');
 safeTrapFocus('modal-zero');
 safeTrapFocus('modal-confirm');
 safeTrapFocus('modal-forgot');
+safeTrapFocus('modal-family-edit'); // New
 
 
 // --- Login Handlers ---
@@ -1011,7 +1161,7 @@ window.addEventListener('keydown', (e) => {
         if (currentScreen === 'edit') return; 
         const menu = document.getElementById('menu-account-dropdown');
         if (!menu.classList.contains('hidden')) { e.preventDefault(); menu.classList.add('hidden'); document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false'); document.getElementById('btn-account-menu').focus(); return; }
-        const modals = document.querySelectorAll('[id^="modal-"]:not(.hidden)'); if (modals.length > 0) { e.preventDefault(); closeModals(); document.getElementById('modal-qty').classList.add('hidden'); document.getElementById('modal-unit').classList.add('hidden'); return; }
+        const modals = document.querySelectorAll('[id^="modal-"]:not(.hidden)'); if (modals.length > 0) { e.preventDefault(); closeModals(); document.getElementById('modal-qty').classList.add('hidden'); document.getElementById('modal-unit').classList.add('hidden'); document.getElementById('modal-family-edit').classList.add('hidden'); return; }
         if (currentScreen !== 'home' && currentScreen !== 'login') { 
             document.getElementById('home-search').value = ''; document.getElementById('takeout-search').value = '';
             document.getElementById('btn-clear-home-search').classList.add('hidden'); document.getElementById('btn-clear-takeout-search').classList.add('hidden');
