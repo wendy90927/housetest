@@ -11,7 +11,7 @@
     border-width: 0;
 }
 
-/* 强焦样式 - 橙色高亮 */
+/* 强焦样式 - 橙色高亮，偏移确保清晰 */
 *:focus {
     outline: 4px solid #f97316; 
     outline-offset: 2px;
@@ -132,57 +132,69 @@
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* === 家庭/房间管理列表项 === */
-.manage-item {
+/* === 管理界面样式 === */
+.mgmt-controls {
     display: flex;
-    flex-direction: column; /* 移动端默认垂直 */
+    flex-direction: column;
+    gap: 1rem;
+}
+@media (min-width: 640px) {
+    .mgmt-controls {
+        flex-direction: row;
+        align-items: stretch;
+    }
+}
+
+.mgmt-btn {
+    flex: 1;
     padding: 1rem;
-    background-color: #f9fafb;
+    border-radius: 0.75rem;
+    font-weight: bold;
+    font-size: 1.125rem;
+    text-align: center;
+    border-width: 2px;
+    transition: all 0.2s;
+}
+
+/* 按钮变体 */
+.btn-blue {
+    background-color: #eff6ff;
+    color: #1e40af;
+    border-color: #bfdbfe;
+}
+.btn-blue:hover { background-color: #dbeafe; }
+
+.btn-green {
+    background-color: #f0fdf4;
+    color: #166534;
+    border-color: #bbf7d0;
+}
+.btn-green:hover { background-color: #dcfce7; }
+
+.btn-red {
+    background-color: #fef2f2;
+    color: #991b1b;
+    border-color: #fecaca;
+}
+.btn-red:hover { background-color: #fee2e2; }
+
+/* 独立房间列表样式 */
+.room-del-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    padding: 1rem;
     border: 2px solid #e5e7eb;
     border-radius: 0.75rem;
     margin-bottom: 0.75rem;
 }
-@media (min-width: 640px) {
-    .manage-item {
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-    }
-}
-.manage-info {
-    font-weight: bold;
-    font-size: 1.125rem;
-    margin-bottom: 0.5rem;
-    color: #1f2937;
-}
-@media (min-width: 640px) { .manage-info { margin-bottom: 0; } }
-
-.manage-actions {
-    display: flex;
-    gap: 0.5rem;
-}
-.btn-icon-action {
+.room-del-btn {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border: 2px solid #fecaca;
     padding: 0.5rem 1rem;
     border-radius: 0.5rem;
     font-weight: bold;
-    border-width: 2px;
-    font-size: 0.95rem;
 }
-.btn-edit {
-    background-color: #e0f2fe;
-    color: #0369a1;
-    border-color: #bae6fd;
-}
-.btn-edit:hover { background-color: #bae6fd; }
-
-.btn-delete {
-    background-color: #fee2e2;
-    color: #991b1b;
-    border-color: #fecaca;
-}
-.btn-delete:hover { background-color: #fecaca; }
-
-/* 独立警告页面背景 */
-.screen-danger {
-    background-color: #fff1f2; /* 浅红背景 */
-}
+.room-del-btn:hover { background-color: #fecaca; }
