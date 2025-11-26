@@ -46,6 +46,29 @@
     color: #1e40af;
 }
 
+/* 房间选择 Chip 样式 (新加) */
+.room-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border-radius: 9999px;
+    font-weight: bold;
+    cursor: pointer;
+    border: 2px solid #e5e7eb;
+    background-color: white;
+    color: #374151;
+    transition: all 0.2s;
+    user-select: none;
+}
+.room-chip[aria-checked="true"] {
+    background-color: #2563eb; /* 蓝色背景 */
+    color: white;
+    border-color: #1d4ed8;
+}
+.room-chip:focus {
+    outline: 4px solid #f97316; /* 保持一致的焦点样式 */
+}
+
 /* 自定义输入触发器 */
 .custom-input-trigger {
     flex-grow: 1;

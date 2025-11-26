@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>家庭物品管家V2.3</title>
+    <title>家庭物品管家V2.4</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -64,10 +64,10 @@
                         <span aria-hidden="true">▼</span>
                     </button>
                     <div id="menu-account-dropdown" class="hidden absolute top-full right-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-200 text-gray-900 z-50 flex flex-col">
-                        <div class="border-b border-gray-200">
+                        <div class="border-b border-gray-200 relative">
                             <button id="btn-family-submenu-trigger" aria-haspopup="true" aria-expanded="false" class="w-full text-left px-4 py-4 hover:bg-gray-100 font-bold text-gray-800 flex justify-between items-center">
                                 <span>切换家庭</span>
-                                <span aria-hidden="true">?</span>
+                                <span aria-hidden="true">▸</span>
                             </button>
                             <div id="menu-family-list" class="hidden bg-gray-50 border-t border-gray-200" role="menu">
                                 </div>
@@ -325,6 +325,7 @@
         <div class="max-w-3xl mx-auto w-full p-6 flex-grow overflow-y-auto">
             <p class="text-lg font-bold text-gray-700 mb-4" id="room-delete-subtitle">请选择要删除的房间：</p>
             <div id="container-room-delete-list" role="list"></div>
+            <button id="btn-dummy-focus-trap-del" class="sr-only">Focus Trap</button>
         </div>
     </div>
 
@@ -384,7 +385,7 @@
                     <select id="settings-room-family-select" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg font-bold mb-6"></select>
                     
                     <div class="mgmt-controls mb-6">
-                         <button id="btn-room-add-open" class="mgmt-btn btn-green">新增房间</button>
+                        <button id="btn-room-add-open" class="mgmt-btn btn-green">新增房间</button>
                         <button id="btn-room-delete-open" class="mgmt-btn btn-red">删除房间</button>
                     </div>
 
@@ -438,13 +439,28 @@
     </div>
 
     <div id="modal-room-add" class="hidden fixed inset-0 bg-black bg-opacity-70 z-50 flex justify-center items-center">
-        <div class="bg-white w-full max-w-md p-6 rounded-2xl shadow-2xl border-4 border-green-200" role="dialog" aria-modal="true" aria-labelledby="title-room-add">
+        <div class="bg-white w-full max-w-md p-6 rounded-2xl shadow-2xl border-4 border-green-200 flex flex-col max-h-[90vh]" role="dialog" aria-modal="true" aria-labelledby="title-room-add">
             <h2 id="title-room-add" class="text-2xl font-bold mb-4 outline-none" tabindex="-1">新增房间</h2>
-            <div class="mb-6">
-                <label for="input-new-room-name" class="block font-bold mb-1">房间名称</label>
-                <input type="text" id="input-new-room-name" class="w-full p-3 border-2 border-gray-300 rounded-lg font-bold">
+            
+            <div class="overflow-y-auto flex-grow pr-2">
+                <div class="mb-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    <p class="font-bold text-gray-700 mb-2">当前已有房间：</p>
+                    <p id="room-add-existing-list" class="text-gray-600 text-sm leading-relaxed" aria-live="polite">加载中...</p>
+                </div>
+
+                <div class="mb-6">
+                    <p class="font-bold text-lg mb-2" id="label-recommend-rooms">推荐添加 (按空格键选中):</p>
+                    <div id="room-add-recommend-container" class="flex flex-wrap gap-2" role="group" aria-labelledby="label-recommend-rooms">
+                        </div>
+                </div>
+
+                <div class="mb-6">
+                    <label for="input-new-room-name" class="block font-bold mb-1">自定义房间名称 (可选)</label>
+                    <input type="text" id="input-new-room-name" class="w-full p-3 border-2 border-gray-300 rounded-lg font-bold" placeholder="输入其他名称...">
+                </div>
             </div>
-            <div class="flex gap-3">
+
+            <div class="flex gap-3 mt-4">
                 <button id="btn-confirm-add-room" class="flex-1 bg-green-600 text-white font-bold py-3 rounded-lg shadow">保存</button>
                 <button id="btn-cancel-add-room" class="flex-1 bg-gray-200 text-gray-800 font-bold py-3 rounded-lg">取消</button>
             </div>
