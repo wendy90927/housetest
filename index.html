@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>家庭物品管家V2.2</title>
+    <title>家庭物品管家V2.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -64,11 +64,15 @@
                         <span aria-hidden="true">▼</span>
                     </button>
                     <div id="menu-account-dropdown" class="hidden absolute top-full right-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-200 text-gray-900 z-50 flex flex-col">
-                        <div class="bg-gray-50 p-2 border-b border-gray-200">
-                            <span class="text-sm font-bold text-gray-500 px-2">切换家庭：</span>
-                            <div id="menu-family-list" class="flex flex-col mt-1 space-y-1">
+                        <div class="border-b border-gray-200">
+                            <button id="btn-family-submenu-trigger" aria-haspopup="true" aria-expanded="false" class="w-full text-left px-4 py-4 hover:bg-gray-100 font-bold text-gray-800 flex justify-between items-center">
+                                <span>切换家庭</span>
+                                <span aria-hidden="true">?</span>
+                            </button>
+                            <div id="menu-family-list" class="hidden bg-gray-50 border-t border-gray-200" role="menu">
                                 </div>
                         </div>
+                        
                         <button id="btn-open-settings" class="w-full text-left px-4 py-4 hover:bg-gray-100 font-bold text-blue-800 border-b border-gray-200">账户与家庭设置</button>
                         <button id="btn-clear-data" class="w-full text-left px-4 py-4 hover:bg-red-50 text-red-700 font-bold border-b border-gray-200">清空所有数据</button>
                         <button id="btn-delete-account" class="w-full text-left px-4 py-4 hover:bg-red-50 text-red-700 font-bold border-b border-gray-200">注销账号</button>
@@ -357,18 +361,18 @@
             <div id="panel-family" class="tab-panel hidden flex-grow p-6" role="tabpanel" aria-labelledby="tab-btn-family">
                 <h2 class="text-2xl font-bold mb-4 text-gray-800">家庭管理</h2>
                 <div class="bg-white p-6 rounded-xl border-2 border-gray-200 shadow-sm mb-6">
-                    <label for="settings-family-select" class="block font-bold text-lg mb-2">选择要编辑的家庭：</label>
+                    <label for="settings-family-select" class="block font-bold text-lg mb-2">选择家庭：</label>
                     <select id="settings-family-select" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg font-bold mb-6"></select>
                     
-                    <div class="flex gap-4 mb-4">
-                         <button id="btn-family-tab-save" class="flex-1 bg-blue-600 text-white p-3 rounded-lg font-bold">保存并应用</button>
-                         <button id="btn-family-tab-cancel" class="flex-1 bg-gray-200 text-gray-800 p-3 rounded-lg font-bold">取消</button>
+                    <div class="mgmt-controls mb-6">
+                        <button id="btn-edit-family" class="mgmt-btn btn-blue">编辑家庭</button>
+                        <button id="btn-delete-family" class="mgmt-btn btn-red">删除家庭</button>
+                        <button id="btn-new-family" class="mgmt-btn btn-green">新建家庭</button>
                     </div>
 
-                    <div class="mgmt-controls">
-                        <button id="btn-new-family" class="mgmt-btn btn-green">新建家庭</button>
-                        <button id="btn-edit-family" class="mgmt-btn btn-blue">重命名/修改</button>
-                        <button id="btn-delete-family" class="mgmt-btn btn-red">删除家庭</button>
+                    <div class="flex gap-4">
+                         <button id="btn-family-tab-save" class="flex-1 bg-blue-600 text-white p-3 rounded-lg font-bold">保存并应用</button>
+                         <button id="btn-family-tab-cancel" class="flex-1 bg-gray-200 text-gray-800 p-3 rounded-lg font-bold">取消</button>
                     </div>
                 </div>
             </div>
@@ -379,14 +383,14 @@
                     <label for="settings-room-family-select" class="block font-bold text-lg mb-2">选择家庭：</label>
                     <select id="settings-room-family-select" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg font-bold mb-6"></select>
                     
-                    <div class="flex gap-4 mb-4">
-                         <button id="btn-room-tab-save" class="flex-1 bg-blue-600 text-white p-3 rounded-lg font-bold">保存选择</button>
-                         <button id="btn-room-tab-cancel" class="flex-1 bg-gray-200 text-gray-800 p-3 rounded-lg font-bold">取消</button>
+                    <div class="mgmt-controls mb-6">
+                         <button id="btn-room-add-open" class="mgmt-btn btn-green">新增房间</button>
+                        <button id="btn-room-delete-open" class="mgmt-btn btn-red">删除房间</button>
                     </div>
 
-                    <div class="mgmt-controls">
-                        <button id="btn-room-add-open" class="mgmt-btn btn-green">新增房间</button>
-                        <button id="btn-room-delete-open" class="mgmt-btn btn-red">删除房间</button>
+                    <div class="flex gap-4">
+                         <button id="btn-room-tab-save" class="flex-1 bg-blue-600 text-white p-3 rounded-lg font-bold">保存选择</button>
+                         <button id="btn-room-tab-cancel" class="flex-1 bg-gray-200 text-gray-800 p-3 rounded-lg font-bold">取消</button>
                     </div>
                 </div>
             </div>

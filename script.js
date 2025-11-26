@@ -61,7 +61,7 @@ const DEFAULT_FAMILIES = [
 ];
 
 let FAMILY_DATA = JSON.parse(localStorage.getItem('family_data_v4') || JSON.stringify(DEFAULT_FAMILIES));
-// 升级旧数据：如果没有family_data_v4，检查旧版
+// 升级旧数据
 if (!localStorage.getItem('family_data_v4') && localStorage.getItem('family_data_v3')) {
     FAMILY_DATA = JSON.parse(localStorage.getItem('family_data_v3'));
 }
@@ -202,7 +202,6 @@ function updateGlobalRoomSelects() {
         if (id.includes('filter')) html += `<option value="all">全部房间</option>`;
         rooms.forEach(r => { html += `<option value="${r}">${r}</option>`; });
         el.innerHTML = html;
-        // 尝试恢复选值，如果不在列表里了则重置
         if(currentVal && rooms.includes(currentVal)) el.value = currentVal;
         else if (id.includes('filter')) el.value = 'all';
     });
@@ -218,17 +217,48 @@ function renderFamilyMenu() {
     FAMILY_DATA.forEach(fam => {
         const isCurrent = fam.id === currentFamilyId;
         const btn = document.createElement('button');
-        btn.className = `w-full text-left px-4 py-3 hover:bg-gray-100 font-bold flex justify-between items-center ${isCurrent ? 'bg-blue-50 text-blue-800' : 'text-gray-700'}`;
+        btn.className = `w-full text-left px-8 py-3 hover:bg-gray-100 font-bold flex justify-between items-center text-sm ${isCurrent ? 'bg-blue-50 text-blue-800' : 'text-gray-700'}`;
         btn.innerHTML = `<span>${fam.name}</span>${isCurrent ? '<span>✔</span>' : ''}`;
+        btn.setAttribute('role', 'menuitem');
+        
+        btn.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                e.stopPropagation();
+                closeFamilySubmenu();
+            }
+        });
+
         btn.onclick = (e) => {
              e.stopPropagation();
              switchFamily(fam.id);
+             // 关闭所有菜单
              document.getElementById('menu-account-dropdown').classList.add('hidden');
              document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false');
+             document.getElementById('btn-account-menu').focus();
         };
         container.appendChild(btn);
     });
 }
+
+function openFamilySubmenu() {
+    const list = document.getElementById('menu-family-list');
+    const trigger = document.getElementById('btn-family-submenu-trigger');
+    list.classList.remove('hidden');
+    trigger.setAttribute('aria-expanded', 'true');
+    // 焦点进入第一个家庭
+    const first = list.querySelector('button');
+    if(first) first.focus();
+}
+
+function closeFamilySubmenu() {
+    const list = document.getElementById('menu-family-list');
+    const trigger = document.getElementById('btn-family-submenu-trigger');
+    list.classList.add('hidden');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.focus();
+}
+
 
 // --- ★★★ 账户设置 - 核心逻辑 ★★★ ---
 
@@ -320,12 +350,12 @@ function refreshSettingsUI() {
     famSelect.innerHTML = generateOpts();
     roomFamSelect.innerHTML = generateOpts();
     
-    // 默认选中当前全局家庭，或者保持用户的选择
+    // 默认选中当前全局家庭
     famSelect.value = currentFamilyId;
     roomFamSelect.value = currentFamilyId;
 }
 
-// 增加：家庭管理tab的 保存与取消
+// 家庭管理tab的 保存与取消
 document.getElementById('btn-family-tab-save').addEventListener('click', () => {
     const selectedId = document.getElementById('settings-family-select').value;
     switchFamily(selectedId);
@@ -336,12 +366,8 @@ document.getElementById('btn-family-tab-cancel').addEventListener('click', () =>
     announce("已取消更改");
 });
 
-// 增加：房间管理tab的 保存与取消
+// 房间管理tab的 保存与取消
 document.getElementById('btn-room-tab-save').addEventListener('click', () => {
-    // 房间管理的保存其实主要是确认“我正在查看这个家庭”
-    const selectedId = document.getElementById('settings-room-family-select').value;
-    // 这里如果用户选了别的，可以视为切换家庭查看
-    // 但为了逻辑简单，我们只做提示
     announce("设置已保存");
 });
 document.getElementById('btn-room-tab-cancel').addEventListener('click', () => {
@@ -371,6 +397,8 @@ document.getElementById('btn-confirm-new-family').addEventListener('click', () =
     refreshSettingsUI();
     document.getElementById('modal-family-new').classList.add('hidden');
     announce(`已创建并切换到 ${name}`);
+    // 焦点回归
+    setTimeout(() => document.getElementById('settings-family-select').focus(), 100);
 });
 
 document.getElementById('btn-edit-family').addEventListener('click', () => {
@@ -394,11 +422,12 @@ document.getElementById('btn-confirm-edit-family').addEventListener('click', () 
         refreshSettingsUI();
         document.getElementById('modal-family-edit').classList.add('hidden');
         announce("修改已保存");
-        // 如果改的是当前家庭，更新首页标题
         if(famId === currentFamilyId) {
             const display = document.getElementById('current-family-display');
             if(display) display.textContent = fam.name;
         }
+        // 焦点回归
+        setTimeout(() => document.getElementById('settings-family-select').focus(), 100);
     }
 });
 
@@ -409,7 +438,6 @@ document.getElementById('btn-delete-family').addEventListener('click', () => {
     const fam = FAMILY_DATA.find(f => f.id === famId);
     if(confirm(`确定删除家庭“${fam.name}”吗？此操作不可恢复。`)) {
         FAMILY_DATA = FAMILY_DATA.filter(f => f.id !== famId);
-        // 如果删除了当前家庭，重置为第一个
         if (currentFamilyId === famId) {
             switchFamily(FAMILY_DATA[0].id);
         } else {
@@ -417,6 +445,8 @@ document.getElementById('btn-delete-family').addEventListener('click', () => {
         }
         refreshSettingsUI();
         announce("已删除");
+        // 焦点回归
+        setTimeout(() => document.getElementById('settings-family-select').focus(), 100);
     }
 });
 
@@ -438,6 +468,8 @@ document.getElementById('btn-confirm-add-room').addEventListener('click', () => 
         saveFamilyData();
         document.getElementById('modal-room-add').classList.add('hidden');
         announce(`已添加房间 ${name}`);
+        // 焦点回归
+        setTimeout(() => document.getElementById('settings-room-family-select').focus(), 100);
     } else if (fam && fam.rooms.includes(name)) {
         announce("房间已存在");
     }
@@ -475,7 +507,6 @@ document.getElementById('btn-room-delete-open').addEventListener('click', () => 
 
 document.getElementById('btn-back-room-list').addEventListener('click', () => {
     switchScreen('screen-settings');
-    // 保持在房间管理Tab
     switchTab('rooms');
 });
 
@@ -536,7 +567,6 @@ function safeTrapFocus(id) {
     });
 }
 
-// --- DOM Ready Logic (修复登录按钮无效的关键) ---
 document.addEventListener('DOMContentLoaded', () => {
     // 绑定 Trap
     safeTrapFocus('modal-action');
@@ -576,7 +606,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if(rememberEmail) localStorage.setItem('savedEmail', e); else localStorage.removeItem('savedEmail');
             
-            // UI Feedback
             btnLogin.textContent = "登录中...";
             btnLogin.disabled = true;
             btnLogin.classList.add('opacity-50');
@@ -584,11 +613,9 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 await setPersistence(auth, autoLogin ? browserLocalPersistence : browserSessionPersistence);
                 await signInWithEmailAndPassword(auth, e, p);
-                // 成功后 onAuthStateChanged 会处理跳转
             } catch(err) { 
                 announce("登录失败"); 
                 alert("登录失败：" + err.message); 
-                // 恢复按钮
                 btnLogin.textContent = "登录";
                 btnLogin.disabled = false;
                 btnLogin.classList.remove('opacity-50');
@@ -608,7 +635,6 @@ if(btnAccount && menuAccount) {
             document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'true');
             // 每次打开菜单，重新渲染家庭列表，确保最新
             renderFamilyMenu();
-            // 焦点给第一个元素
             setTimeout(() => {
                 const firstBtn = menuAccount.querySelector('button');
                 if(firstBtn) firstBtn.focus();
@@ -622,6 +648,25 @@ if(btnAccount && menuAccount) {
         }
     });
 }
+
+// 子菜单触发逻辑
+const btnSubmenu = document.getElementById('btn-family-submenu-trigger');
+if (btnSubmenu) {
+    btnSubmenu.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const list = document.getElementById('menu-family-list');
+        if (list.classList.contains('hidden')) openFamilySubmenu();
+        else closeFamilySubmenu();
+    });
+    btnSubmenu.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            openFamilySubmenu();
+        }
+    });
+}
+
 
 document.getElementById('btn-logout').addEventListener('click', () => signOut(auth).then(() => announce("已退出")));
 document.getElementById('btn-clear-data').addEventListener('click', () => {
@@ -724,17 +769,10 @@ function refreshResultsList() {
 function renderList(containerId, filterRoom, filterCat, sourceArray) {
     const container = document.getElementById(containerId);
     
-    // 获取当前家庭的房间列表，用于验证
+    // 获取当前家庭的房间列表
     const currentRooms = getCurrentRooms();
 
     const filtered = sourceArray.filter(item => {
-        // 重要：先过滤掉不属于当前家庭的物品
-        // 由于Firebase数据没有存familyId（为了简单兼容老数据），
-        // 我们假设：如果物品的 room 存在于 当前家庭的 rooms 列表里，就显示。
-        // 或者：如果用户没有给物品分配房间，默认显示在所有家庭？不，这样太乱。
-        // *更好的逻辑*：如果物品的 room 在当前家庭的 room 列表里，才显示。
-        // 但如果两个家庭都有“客厅”，会混淆。
-        // 由于后端没改，我们暂且认为：只有当 item.room 在 currentRooms 里时才显示。
         if (!currentRooms.includes(item.room)) return false;
 
         const roomMatch = filterRoom === 'all' || item.room === filterRoom;
