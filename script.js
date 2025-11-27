@@ -96,30 +96,35 @@ function switchFamily(famId) {
     currentFamilyId = famId;
     localStorage.setItem('current_family_id', currentFamilyId);
     
+    // 1. 暴力清空列表，防止视觉残留
+    document.getElementById('home-list').innerHTML = '';
+    document.getElementById('takeout-list').innerHTML = '';
+
+    // 2. 重置筛选器状态，防止旧家庭的筛选条件干扰
+    document.getElementById('home-filter').value = 'all';
+    document.getElementById('home-filter-cat').value = 'all';
+    homeFilterRoom = 'all'; 
+    homeFilterCategory = 'all';
+
     // 更新UI
     updateGlobalRoomSelects();
     renderFamilyMenu();
     
-    // 解决问题3：暴力清空列表，杜绝残留
-    document.getElementById('home-list').innerHTML = '';
-    document.getElementById('takeout-list').innerHTML = '';
+    // 3. 强制刷新数据
+    refreshHomeList();
     
-    // 强制刷新首页 (延迟一点点确保状态更新)
-    setTimeout(() => {
-        refreshHomeList();
-        // 更新首页显示
-        const display = document.getElementById('current-family-display');
-        if(display) display.textContent = fam.name;
+    // 更新首页显示
+    const display = document.getElementById('current-family-display');
+    if(display) display.textContent = fam.name;
 
-        // 更新账户按钮的朗读信息
-        const user = auth.currentUser;
-        if (user) {
-            const menuBtn = document.getElementById('btn-account-menu');
-            if(menuBtn) menuBtn.setAttribute('aria-label', `当前账号：${user.email}，当前家庭：${fam.name}，点击展开菜单`);
-        }
-        
-        announce(`已切换到：${fam.name}`);
-    }, 10);
+    // 更新账户按钮的朗读信息
+    const user = auth.currentUser;
+    if (user) {
+        const menuBtn = document.getElementById('btn-account-menu');
+        if(menuBtn) menuBtn.setAttribute('aria-label', `当前账号：${user.email}，当前家庭：${fam.name}，点击展开菜单`);
+    }
+    
+    announce(`已切换到：${fam.name}`);
 }
 
 function getCurrentRooms() {
@@ -501,31 +506,47 @@ function renderAddRoomModalContent() {
     const fam = FAMILY_DATA.find(f => f.id === famId);
     if(!fam) return;
 
-    // 1. 已有房间文本展示
-    document.getElementById('room-add-existing-list').textContent = fam.rooms.join('、') || '暂无房间';
+    // 1. 简单的文本提示
+    document.getElementById('room-add-existing-list').textContent = '勾选下列房间以添加，取消勾选以移除：';
 
-    // 2. 统一渲染“选择房间”列表 (复选框模式)
+    // 2. 渲染“选择房间”列表 (复选框模式)
     const container = document.getElementById('room-add-recommend-container');
     container.innerHTML = '';
     
-    // 解决问题2：使用标准复选框，默认勾选已有房间
+    // 增加语义分组，让读屏软件知道这是一个组
+    container.setAttribute('role', 'group');
+    container.setAttribute('aria-label', '选择房间');
+
     DEFAULT_ROOMS.forEach((room, index) => {
         const isOwned = fam.rooms.includes(room);
-        
         const wrapper = document.createElement('div');
-        wrapper.className = 'flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-200';
+        wrapper.className = 'flex items-center gap-2 p-3 bg-gray-50 rounded border border-gray-200 mb-2';
         
-        // 唯一ID
         const checkboxId = `chk-room-${index}`;
         
-        // 构建复选框 HTML
         wrapper.innerHTML = `
             <input type="checkbox" id="${checkboxId}" class="w-6 h-6 text-blue-600 rounded focus:ring-blue-500" ${isOwned ? 'checked' : ''} value="${room}">
-            <label for="${checkboxId}" class="text-lg font-bold text-gray-800 cursor-pointer select-none">${room}</label>
+            <label for="${checkboxId}" class="text-lg font-bold text-gray-800 cursor-pointer select-none flex-grow">${room}</label>
         `;
         
         container.appendChild(wrapper);
     });
+
+    // 关键修复：内容重新渲染后，必须重新绑定 Focus Trap，否则 Tab 键会跳过新生成的复选框
+    // 我们先移除旧的监听器（通过克隆节点替换），再绑定新的
+    const modal = document.getElementById('modal-room-add');
+    const newModal = modal.cloneNode(true);
+    modal.parentNode.replaceChild(newModal, modal);
+    
+    // 重新绑定所有事件
+    document.getElementById('btn-confirm-add-room').addEventListener('click', confirmAddRoomAction);
+    document.getElementById('btn-cancel-add-room').addEventListener('click', () => {
+        document.getElementById('modal-room-add').classList.add('hidden');
+        document.getElementById('btn-room-add-open').focus();
+    });
+    
+    // 重新激活焦点陷阱
+    safeTrapFocus('modal-room-add');
 }
 
 // 打开新增房间
@@ -536,26 +557,25 @@ document.getElementById('btn-room-add-open').addEventListener('click', () => {
     document.getElementById('title-room-add').focus();
 });
 
-document.getElementById('btn-confirm-add-room').addEventListener('click', () => {
+// 提取为命名函数，以便重新绑定
+window.confirmAddRoomAction = () => {
     const famId = document.getElementById('settings-room-family-select').value;
     const fam = FAMILY_DATA.find(f => f.id === famId);
     if(!fam) return;
 
     let changeCount = 0;
-    const oldRoomList = [...fam.rooms];
     
-    // 1. 处理复选框列表 (同步状态：勾选的加，没勾选的删)
+    // 1. 处理复选框
     const checkboxes = document.querySelectorAll('#room-add-recommend-container input[type="checkbox"]');
     checkboxes.forEach(chk => {
         const roomName = chk.value;
         if (chk.checked) {
-            // 如果勾选了，且原来没有 -> 添加
             if (!fam.rooms.includes(roomName)) {
                 fam.rooms.push(roomName);
                 changeCount++;
             }
         } else {
-            // 如果没勾选，但原来有 -> 删除 (仅限默认房间列表中的)
+            // 取消勾选 = 删除 (仅限默认列表内的)
             if (fam.rooms.includes(roomName)) {
                 fam.rooms = fam.rooms.filter(r => r !== roomName);
                 changeCount++;
@@ -563,7 +583,7 @@ document.getElementById('btn-confirm-add-room').addEventListener('click', () => 
         }
     });
 
-    // 2. 添加自定义房间输入框的内容
+    // 2. 自定义输入
     const customName = document.getElementById('input-new-room-name').value.trim();
     if (customName && !fam.rooms.includes(customName)) {
         fam.rooms.push(customName);
@@ -578,9 +598,11 @@ document.getElementById('btn-confirm-add-room').addEventListener('click', () => 
         announce("没有检测到变动");
     }
     
-    // 焦点回归
     setTimeout(() => document.getElementById('btn-room-add-open').focus(), 100);
-});
+};
+
+// 初始绑定
+document.getElementById('btn-confirm-add-room').addEventListener('click', confirmAddRoomAction);
 
 // 删除房间 (独立页面)
 document.getElementById('btn-room-delete-open').addEventListener('click', () => {
@@ -765,28 +787,74 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert("登录失败：" + err.message); 
                 btnLogin.textContent = "登录";
                 btnLogin.disabled = false;
-                btnLogin.classList.remove('opacity-50');
+btnLogin.classList.remove('opacity-50');
             }
         });
     }
     
-    // 解决问题4：下拉框选中后使用 'assertive' 强制朗读
-    const announceSelectChange = (id) => {
-        const el = document.getElementById(id);
-        if(el) {
-            el.addEventListener('change', () => {
-                const text = el.options[el.selectedIndex].text;
-                // 去掉可能包含的"(当前)"后缀
-                const cleanText = text.replace(' (当前)', '');
-                // 第三个参数 'assertive' 确保打断当前朗读，立即播报新内容
-                announce(`已选中 ${cleanText}`, 'normal', 'assertive');
-            });
-        }
-    };
-    announceSelectChange('settings-family-select');
-    announceSelectChange('settings-room-family-select');
+    // 解决问题4：删除所有自定义下拉框朗读代码，回归原生
 
-    // 解决问题1：修复切换家庭菜单的右光标展开
+    // 解决问题1：重写菜单交互 (右光标展开，左光标折叠)
+    const btnSubmenu = document.getElementById('btn-family-submenu-trigger');
+    const menuList = document.getElementById('menu-family-list');
+
+    if (btnSubmenu && menuList) {
+        // 展开函数
+        const openMenu = () => {
+            menuList.classList.remove('hidden');
+            btnSubmenu.setAttribute('aria-expanded', 'true');
+            // 焦点直接进第一个选项
+            const first = menuList.querySelector('button');
+            if(first) first.focus();
+        };
+
+        // 折叠函数
+        const closeMenu = () => {
+            menuList.classList.add('hidden');
+            btnSubmenu.setAttribute('aria-expanded', 'false');
+            btnSubmenu.focus();
+        };
+
+        // 绑定触发器事件
+        btnSubmenu.addEventListener('keydown', (e) => {
+            // 右光标、空格、回车 -> 展开
+            if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault(); e.stopPropagation();
+                openMenu();
+            }
+        });
+        
+        // 绑定触发器点击
+        btnSubmenu.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (menuList.classList.contains('hidden')) openMenu(); else closeMenu();
+        });
+
+        // 绑定列表内事件 (事件委托)
+        menuList.addEventListener('keydown', (e) => {
+            const current = document.activeElement;
+            const items = Array.from(menuList.querySelectorAll('button'));
+            const idx = items.indexOf(current);
+
+            // 左光标 -> 折叠并回退
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault(); e.stopPropagation();
+                closeMenu();
+            }
+            // 上下光标 -> 循环浏览
+            else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                const next = items[idx + 1] || items[0];
+                if(next) next.focus();
+            }
+            else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                const prev = items[idx - 1] || items[items.length - 1];
+                if(prev) prev.focus();
+            }
+        });
+    }
+});
     const btnSubmenu = document.getElementById('btn-family-submenu-trigger');
     if (btnSubmenu) {
         // 点击事件
