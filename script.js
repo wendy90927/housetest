@@ -86,21 +86,30 @@ function saveFamilyData() {
 function switchFamily(famId) {
     const fam = FAMILY_DATA.find(f => f.id === famId);
     if (!fam) return;
-    
+
     currentFamilyId = famId;
     localStorage.setItem('current_family_id', currentFamilyId);
-    
+
     // 更新UI
     updateGlobalRoomSelects();
     renderFamilyMenu();
-    
-    // 强制刷新首页，确保使用新的 currentFamilyId 进行过滤
+
+    // 解决问题3：立即清空列表，防止旧数据视觉残留
+    document.getElementById('home-list').innerHTML = '';
+    // 强制刷新首页
     refreshHomeList();
-    
+
     // 更新首页显示
     const display = document.getElementById('current-family-display');
     if(display) display.textContent = fam.name;
-    
+
+    // 解决问题4：同时更新账户按钮的朗读信息
+    const user = auth.currentUser;
+    if (user) {
+        const menuBtn = document.getElementById('btn-account-menu');
+        if(menuBtn) menuBtn.setAttribute('aria-label', `当前账号：${user.email}，当前家庭：${fam.name}，点击展开菜单`);
+    }
+
     announce(`已切换到：${fam.name}`);
 }
 
@@ -210,26 +219,40 @@ function updateGlobalRoomSelects() {
     });
 }
 
-
 // --- 渲染账号下拉菜单中的家庭列表 ---
 function renderFamilyMenu() {
     const container = document.getElementById('menu-family-list');
     if (!container) return;
     container.innerHTML = '';
-    
-    FAMILY_DATA.forEach(fam => {
+
+    const allFams = FAMILY_DATA;
+
+    allFams.forEach((fam, index) => {
         const isCurrent = fam.id === currentFamilyId;
         const btn = document.createElement('button');
         btn.className = `w-full text-left px-8 py-3 hover:bg-gray-100 font-bold flex justify-between items-center text-sm ${isCurrent ? 'bg-blue-50 text-blue-800' : 'text-gray-700'}`;
         btn.innerHTML = `<span>${fam.name}</span>${isCurrent ? '<span>✔</span>' : ''}`;
         btn.setAttribute('role', 'menuitem');
-        
-        // 键盘：左箭头返回上级
+        // 解决问题1：增加上下光标导航
+        btn.setAttribute('data-index', index);
+
         btn.addEventListener('keydown', (e) => {
+            // 左光标：关闭子菜单，焦点回弹
             if (e.key === 'ArrowLeft') {
-                e.preventDefault();
-                e.stopPropagation();
+                e.preventDefault(); e.stopPropagation();
                 closeFamilySubmenu();
+            }
+            // 上光标：移到上一个家庭
+            else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                const prev = container.children[index - 1];
+                if (prev) prev.focus();
+            }
+            // 下光标：移到下一个家庭
+            else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                const next = container.children[index + 1];
+                if (next) next.focus();
             }
         });
 
@@ -476,20 +499,22 @@ function renderAddRoomModalContent() {
     const container = document.getElementById('room-add-recommend-container');
     container.innerHTML = '';
     pendingSelectedRooms = []; // 重置选中态
-    
+
     // 找出尚未添加的默认房间
     const available = DEFAULT_ROOMS.filter(r => !fam.rooms.includes(r));
-    
+
     if (available.length === 0) {
         container.innerHTML = '<span class="text-gray-500 italic">常用房间都已添加</span>';
     } else {
-        available.forEach(room => {
+        // 解决问题2：实现 Roving Tabindex (光标浏览，单TAB停留)
+        available.forEach((room, index) => {
             const chip = document.createElement('div');
             chip.className = 'room-chip';
             chip.textContent = room;
             chip.setAttribute('role', 'checkbox');
             chip.setAttribute('aria-checked', 'false');
-            chip.setAttribute('tabindex', '0');
+            // 只有第一个元素可以被 TAB 聚焦，其他只能通过光标键到达
+            chip.setAttribute('tabindex', index === 0 ? '0' : '-1'); 
             chip.setAttribute('aria-label', `${room}，未选中，按空格键选中`);
 
             const toggle = () => {
@@ -512,6 +537,25 @@ function renderAddRoomModalContent() {
                 if (e.key === ' ' || e.key === 'Spacebar') {
                     e.preventDefault();
                     toggle();
+                }
+                // 区域内光标导航
+                else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    const next = container.children[index + 1] || container.children[0]; // 循环
+                    if(next) {
+                        chip.setAttribute('tabindex', '-1');
+                        next.setAttribute('tabindex', '0');
+                        next.focus();
+                    }
+                }
+                else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    const prev = container.children[index - 1] || container.children[container.children.length - 1]; // 循环
+                    if(prev) {
+                        chip.setAttribute('tabindex', '-1');
+                        prev.setAttribute('tabindex', '0');
+                        prev.focus();
+                    }
                 }
             });
             container.appendChild(chip);
@@ -567,30 +611,51 @@ document.getElementById('btn-room-delete-open').addEventListener('click', () => 
     const famId = document.getElementById('settings-room-family-select').value;
     const fam = FAMILY_DATA.find(f => f.id === famId);
     if(!fam) return;
-    
+
     switchScreen('screen-room-list-delete');
     const container = document.getElementById('container-room-delete-list');
     container.innerHTML = '';
-    
-    fam.rooms.forEach(room => {
-        const div = document.createElement('div');
-        div.className = 'room-del-item';
-        div.innerHTML = `
-            <span class="text-lg font-bold">${room}</span>
-            <button class="room-del-btn" aria-label="删除 ${room}">删除</button>
-        `;
-        div.querySelector('button').addEventListener('click', () => {
-            if(confirm(`确定删除 ${fam.name} 的房间“${room}”吗？`)) {
-                fam.rooms = fam.rooms.filter(r => r !== room);
-                saveFamilyData();
-                div.remove(); // 实时移除
-                announce(`已删除 ${room}`);
-                // 焦点回到“Focus Trap”按钮，防止丢失
-                document.getElementById('btn-dummy-focus-trap-del').focus();
-            }
+
+    // 渲染列表函数，方便递归调用
+    const renderDelList = () => {
+        container.innerHTML = '';
+        if(fam.rooms.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 font-bold">没有可删除的房间</p>';
+            // 焦点移回返回按钮，防止迷路
+            document.getElementById('btn-back-room-list').focus();
+            return;
+        }
+
+        fam.rooms.forEach((room, idx) => {
+            const div = document.createElement('div');
+            div.className = 'room-del-item';
+            div.innerHTML = `
+                <span class="text-lg font-bold">${room}</span>
+                <button class="room-del-btn" aria-label="删除 ${room}">删除</button>
+            `;
+            const btn = div.querySelector('button');
+            btn.addEventListener('click', () => {
+                if(confirm(`确定删除 ${fam.name} 的房间“${room}”吗？`)) {
+                    fam.rooms = fam.rooms.filter(r => r !== room);
+                    saveFamilyData();
+                    announce(`已删除 ${room}`);
+
+                    // 重新渲染
+                    renderDelList();
+
+                    // 解决问题6：将焦点移动到新的列表第一个删除按钮，或返回按钮
+                    setTimeout(() => {
+                        const firstBtn = container.querySelector('.room-del-btn');
+                        if(firstBtn) firstBtn.focus();
+                        else document.getElementById('btn-back-room-list').focus();
+                    }, 100);
+                }
+            });
+            container.appendChild(div);
         });
-        container.appendChild(div);
-    });
+    };
+
+    renderDelList();
     document.getElementById('title-room-list-delete').focus();
 });
 
@@ -619,17 +684,22 @@ document.getElementById('btn-cancel-add-room').addEventListener('click', () => {
 // --- Auth & Init ---
 onAuthStateChanged(auth, user => {
     if (user) {
+        const curFam = FAMILY_DATA.find(f => f.id === currentFamilyId);
+        const famName = curFam ? curFam.name : '未知家庭';
+
+        // 解决问题4：完善朗读信息
         const menuBtn = document.getElementById('btn-account-menu');
-        if(menuBtn) menuBtn.setAttribute('aria-label', `当前账号：${user.email}，点击展开菜单`);
+        if(menuBtn) menuBtn.setAttribute('aria-label', `当前账号：${user.email}，当前家庭：${famName}，点击展开菜单`);
+
         const emailDisplay = document.getElementById('user-email-display');
         if(emailDisplay) emailDisplay.textContent = user.email.split('@')[0];
-        
+
         switchScreen('screen-home');
-        
+
         // 初始化家庭逻辑
         updateGlobalRoomSelects();
         renderFamilyMenu();
-        const curFam = FAMILY_DATA.find(f => f.id === currentFamilyId);
+
         if(curFam) {
             const display = document.getElementById('current-family-display');
             if(display) display.textContent = curFam.name;
@@ -637,6 +707,7 @@ onAuthStateChanged(auth, user => {
 
         setupDataListener(user.uid);
     } else {
+        // ... else 逻辑不变 ...
         if(unsubscribeItems) unsubscribeItems();
         allItems = [];
         switchScreen('screen-login');
