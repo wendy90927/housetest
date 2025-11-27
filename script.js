@@ -495,6 +495,7 @@ const famId = document.getElementById('settings-room-family-select').value;
     // 关键修复：删除了之前导致按钮失效的 cloneNode 代码
     // 只需要重新激活焦点陷阱即可
     safeTrapFocus('modal-room-add');
+}
 
 document.getElementById('btn-room-add-open').addEventListener('click', () => {
     document.getElementById('modal-room-add').classList.remove('hidden');
@@ -749,6 +750,42 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, 50);
             } else {
                 btnSubmenu.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+
+// (2) 切换家庭子菜单 (修复版)
+    if (btnFamilyTrigger && menuList) {
+        const closeFamilyMenu = () => {
+            menuList.classList.add('hidden');
+            btnFamilyTrigger.setAttribute('aria-expanded', 'false');
+            btnFamilyTrigger.focus(); 
+        };
+
+        const openFamilyMenu = () => {
+            menuList.classList.remove('hidden');
+            btnFamilyTrigger.setAttribute('aria-expanded', 'true');
+            const firstItem = menuList.querySelector('button');
+            if (firstItem) firstItem.focus(); 
+        };
+
+        btnFamilyTrigger.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight') { 
+                e.preventDefault();
+                openFamilyMenu();
+            }
+        });
+        
+        btnFamilyTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (menuList.classList.contains('hidden')) openFamilyMenu();
+            else closeFamilyMenu();
+        });
+
+        menuList.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') { 
+                e.preventDefault(); e.stopPropagation();
+                closeFamilyMenu();
             }
         });
     }
