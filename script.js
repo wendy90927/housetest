@@ -1395,12 +1395,31 @@ window.addEventListener('keydown', (e) => {
     if(e.key === 'Escape') {
         if (currentScreen === 'edit') return; 
         const menu = document.getElementById('menu-account-dropdown');
-        if (!menu.classList.contains('hidden')) { e.preventDefault(); menu.classList.add('hidden'); document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false'); document.getElementById('btn-account-menu').focus(); return; }
-        const modals = document.querySelectorAll('[id^="modal-"]:not(.hidden)'); if (modals.length > 0) { e.preventDefault(); closeModals(); document.getElementById('modal-qty').classList.add('hidden'); document.getElementById('modal-unit').classList.add('hidden'); document.getElementById('modal-family-new').classList.add('hidden'); document.getElementById('modal-family-edit').classList.add('hidden'); document.getElementById('modal-room-add').classList.add('hidden'); return; }
+        if (!menu.classList.contains('hidden')) { 
+            e.preventDefault(); 
+            menu.classList.add('hidden'); 
+            document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false'); 
+            document.getElementById('btn-account-menu').focus(); 
+            return; 
+        }
+        const modals = document.querySelectorAll('[id^="modal-"]:not(.hidden)'); 
+        if (modals.length > 0) { 
+            e.preventDefault(); 
+            closeModals(); 
+            document.getElementById('modal-qty').classList.add('hidden'); 
+            document.getElementById('modal-unit').classList.add('hidden'); 
+            document.getElementById('modal-family-new').classList.add('hidden'); 
+            document.getElementById('modal-family-edit').classList.add('hidden'); 
+            document.getElementById('modal-room-add').classList.add('hidden'); 
+            return; 
+        }
         if (currentScreen !== 'home' && currentScreen !== 'login') { 
-            document.getElementById('home-search').value = ''; document.getElementById('takeout-search').value = '';
-            document.getElementById('btn-clear-home-search').classList.add('hidden'); document.getElementById('btn-clear-takeout-search').classList.add('hidden');
-            e.preventDefault(); switchScreen('screen-home'); 
+            document.getElementById('home-search').value = ''; 
+            document.getElementById('takeout-search').value = '';
+            document.getElementById('btn-clear-home-search').classList.add('hidden'); 
+            document.getElementById('btn-clear-takeout-search').classList.add('hidden');
+            e.preventDefault(); 
+            switchScreen('screen-home'); 
         }
     }
 });
