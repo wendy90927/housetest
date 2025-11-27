@@ -689,6 +689,7 @@ function safeTrapFocus(id) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // 1. 初始化焦点陷阱
     safeTrapFocus('modal-action');
     safeTrapFocus('modal-qty');
     safeTrapFocus('modal-unit');
@@ -699,7 +700,141 @@ document.addEventListener('DOMContentLoaded', () => {
     safeTrapFocus('modal-family-edit');
     safeTrapFocus('modal-room-add');
     
+    // 2. 绑定登录逻辑
     const btnLogin = document.getElementById('btn-login');
+    const inputPass = document.getElementById('login-password');
+    
+    if (inputPass) {
+        inputPass.addEventListener('keydown', (e) => { 
+            if (e.key === 'Enter') { 
+                e.preventDefault(); 
+                if (btnLogin) btnLogin.click(); 
+            } 
+        });
+    }
+
+    if (btnLogin) {
+        btnLogin.addEventListener('click', async () => {
+            const emailInput = document.getElementById('login-email');
+            const passInput = document.getElementById('login-password');
+            if (!emailInput || !passInput) return;
+            const e = emailInput.value;
+            const p = passInput.value;
+            const autoLogin = document.getElementById('chk-auto-login').checked;
+            const rememberEmail = document.getElementById('chk-remember-email').checked;
+            if(rememberEmail) localStorage.setItem('savedEmail', e); else localStorage.removeItem('savedEmail');
+            
+            btnLogin.textContent = "登录中...";
+            btnLogin.disabled = true;
+            btnLogin.classList.add('opacity-50');
+
+            try {
+                await setPersistence(auth, autoLogin ? browserLocalPersistence : browserSessionPersistence);
+                await signInWithEmailAndPassword(auth, e, p);
+            } catch(err) { 
+                announce("登录失败"); 
+                alert("登录失败：" + err.message); 
+                btnLogin.textContent = "登录";
+                btnLogin.disabled = false;
+                btnLogin.classList.remove('opacity-50');
+            }
+        });
+    }
+    
+    // 3. 菜单交互重写：标准键盘导航 (包含本次修复的家庭菜单逻辑)
+    const btnSubmenu = document.getElementById('btn-account-menu'); 
+    const btnFamilyTrigger = document.getElementById('btn-family-submenu-trigger');
+    const menuList = document.getElementById('menu-family-list');
+
+    // (1) 账户大菜单
+    if(btnSubmenu) {
+        btnSubmenu.addEventListener('click', (e) => {
+            e.stopPropagation(); playSound('click');
+            const menu = document.getElementById('menu-account-dropdown');
+            menu.classList.toggle('hidden');
+            if(!menu.classList.contains('hidden')) {
+                btnSubmenu.setAttribute('aria-expanded', 'true');
+                renderFamilyMenu();
+                setTimeout(() => {
+                   const first = menu.querySelector('button');
+                   if(first) first.focus();
+                }, 50);
+            } else {
+                btnSubmenu.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+
+    // (2) 切换家庭子菜单 (右光标展开，左光标折叠)
+    if (btnFamilyTrigger && menuList) {
+        const allMenuButtons = () => Array.from(menuList.querySelectorAll('button'));
+
+        const openMenu = () => {
+            menuList.classList.remove('hidden');
+            btnFamilyTrigger.setAttribute('aria-expanded', 'true');
+            // 展开时，焦点直接进入第一个选项
+            const first = menuList.querySelector('button');
+            if(first) first.focus();
+        };
+
+        const closeMenu = () => {
+            menuList.classList.add('hidden');
+            btnFamilyTrigger.setAttribute('aria-expanded', 'false');
+            btnFamilyTrigger.focus();
+        };
+
+        // --- 触发器按钮逻辑 ---
+        btnFamilyTrigger.addEventListener('keydown', (e) => {
+            // 右光标：展开
+            if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                openMenu();
+            }
+        });
+        
+        btnFamilyTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // 点击切换开闭
+            if (menuList.classList.contains('hidden')) openMenu(); 
+            else closeMenu();
+        });
+
+        // --- 菜单列表内部逻辑 ---
+        menuList.addEventListener('keydown', (e) => {
+            // 左光标：折叠并返回
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault(); e.stopPropagation();
+                closeMenu();
+                return;
+            }
+
+            // 上下光标：循环导航
+            const current = document.activeElement;
+            const items = allMenuButtons();
+            const idx = items.indexOf(current);
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                const next = items[(idx + 1) % items.length];
+                if(next) next.focus();
+            }
+            else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                const prev = items[(idx - 1 + items.length) % items.length];
+                if(prev) prev.focus();
+            }
+        });
+    }
+
+    // (3) 点击外部关闭菜单
+    document.addEventListener('click', (e) => {
+        const menu = document.getElementById('menu-account-dropdown');
+        if (btnSubmenu && !btnSubmenu.contains(e.target) && !menu.contains(e.target)) {
+            menu.classList.add('hidden');
+            if(btnSubmenu) btnSubmenu.setAttribute('aria-expanded', 'false');
+        }
+    });
+});
     const inputPass = document.getElementById('login-password');
     
     if (inputPass) {
