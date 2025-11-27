@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged, deleteUser, setPersistence, browserLocalPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, getDocs, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch, increment, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// Config
+// --- Config ---
 const firebaseConfig = {
     apiKey: "AIzaSyC3rxfvajIswJADfzJD0lphVra99vka7nE",
     authDomain: "household-item-management.firebaseapp.com",
@@ -42,24 +42,25 @@ function playSound(type) {
     }
 }
 
+// 优化的朗读函数
 window.announce = (msg, type = 'normal', priority = 'polite') => {
     const el = document.getElementById('live-announcer');
     if(el) {
-        // 支持抢读模式
         el.setAttribute('aria-live', priority);
         el.textContent = msg;
+        
         if (msg.includes("成功") || msg.includes("已添加") || msg.includes("已删除") || msg.includes("保存") || msg.includes("切换")) playSound('success');
         else if (msg.includes("失败") || msg.includes("错误") || msg.includes("不足")) playSound('error');
-        // 1秒后重置为空，并恢复礼貌模式
+        else if (type !== 'normal') playSound('click');
+
         setTimeout(() => { 
             el.textContent = ''; 
-            el.setAttribute('aria-live', 'polite'); 
+            el.setAttribute('aria-live', 'polite'); // 恢复默认
         }, 1000);
     }
 };
 
 // --- Data Model ---
-// 丰富的默认房间配置
 const DEFAULT_ROOMS = ['客厅', '餐厅', '厨房', '卧室', '次卧', '书房', '卫生间', '阳台', '储物间'];
 
 const DEFAULT_FAMILIES = [
@@ -67,15 +68,11 @@ const DEFAULT_FAMILIES = [
 ];
 
 let FAMILY_DATA = JSON.parse(localStorage.getItem('family_data_v4') || JSON.stringify(DEFAULT_FAMILIES));
-// 升级旧数据
 if (!localStorage.getItem('family_data_v4') && localStorage.getItem('family_data_v3')) {
     FAMILY_DATA = JSON.parse(localStorage.getItem('family_data_v3'));
 }
 
-// 核心：读取记住的家庭ID
 let currentFamilyId = localStorage.getItem('current_family_id') || FAMILY_DATA[0].id;
-
-// 确保ID有效
 if (!FAMILY_DATA.find(f => f.id === currentFamilyId)) {
     currentFamilyId = FAMILY_DATA[0].id;
     localStorage.setItem('current_family_id', currentFamilyId);
@@ -88,36 +85,36 @@ function saveFamilyData() {
     renderFamilyMenu();
 }
 
-// 切换当前家庭
+// 切换当前家庭 - 包含强制清空逻辑
 function switchFamily(famId) {
     const fam = FAMILY_DATA.find(f => f.id === famId);
     if (!fam) return;
     
-    currentFamilyId = famId;
-    localStorage.setItem('current_family_id', currentFamilyId);
-    
-    // 1. 暴力清空列表，防止视觉残留
+    // 1. 立即清空 DOM，防止视觉残留
     document.getElementById('home-list').innerHTML = '';
     document.getElementById('takeout-list').innerHTML = '';
 
-    // 2. 重置筛选器状态，防止旧家庭的筛选条件干扰
+    // 2. 更新状态
+    currentFamilyId = famId;
+    localStorage.setItem('current_family_id', currentFamilyId);
+    
+    // 3. 重置筛选器
+    homeFilterRoom = 'all';
+    homeFilterCategory = 'all';
     document.getElementById('home-filter').value = 'all';
     document.getElementById('home-filter-cat').value = 'all';
-    homeFilterRoom = 'all'; 
-    homeFilterCategory = 'all';
-
-    // 更新UI
+    
+    // 4. 更新UI组件
     updateGlobalRoomSelects();
     renderFamilyMenu();
     
-    // 3. 强制刷新数据
+    // 5. 刷新数据列表
     refreshHomeList();
     
-    // 更新首页显示
+    // 更新显示
     const display = document.getElementById('current-family-display');
     if(display) display.textContent = fam.name;
 
-    // 更新账户按钮的朗读信息
     const user = auth.currentUser;
     if (user) {
         const menuBtn = document.getElementById('btn-account-menu');
@@ -146,9 +143,8 @@ let previousScreen = 'home';
 let focusTargetId = null; 
 let searchResults = [];
 let pendingTags = []; 
-let pendingSelectedRooms = []; // 新增房间多选状态
 
-// 自动推断规则
+// Auto Inference
 const INFERENCE_RULES = {
     '食品饮料': ['奶', '水', '茶', '酒', '饮料', '饼', '糖', '巧克力', '可乐', '雪碧', '汁', '咖啡', '燕麦'],
     '烹饪调料': ['油', '盐', '酱', '醋', '米', '面粉', '调料', '鸡精', '味精', '糖', '花椒', '八角'],
@@ -157,14 +153,13 @@ const INFERENCE_RULES = {
     '文具工具': ['笔', '本', '胶', '剪刀', '电池', '螺丝', '刀', '尺', '胶带'],
     '电子数码': ['线', '充电', '耳机', '鼠标', '键盘', 'U盘', '手机', '平板']
 };
-
 const TAG_SUGGESTIONS = {
     '奶': ['饮品', '早餐'], '水': ['饮品', '囤货'], '纸': ['日用', '消耗品'],
     '洗发': ['洗护'], '沐浴': ['洗护'], '牙膏': ['洗护'], '面霜': ['护肤'],
     '口红': ['彩妆'], '感冒': ['药品'], '维': ['保健品']
 };
 
-// --- Unit Presets ---
+// Unit Presets
 let UNIT_LIST = ["个", "包", "箱", "瓶", "袋", "条", "块", "只", "支", "把", "张", "双", "套", "组", "对", "本", "册", "罐", "桶", "壶", "杯", "斤", "公斤", "升", "毫升"];
 const savedUnits = JSON.parse(localStorage.getItem('custom_units') || '[]');
 UNIT_LIST = [...new Set([...UNIT_LIST, ...savedUnits])];
@@ -177,9 +172,6 @@ function learnNewUnit(unit) {
     }
 }
 
-const savedEmail = localStorage.getItem('savedEmail');
-if(savedEmail && document.getElementById('login-email')) document.getElementById('login-email').value = savedEmail;
-
 // --- Screen Switcher ---
 function switchScreen(screenId) {
     if (screenId === 'screen-edit') {
@@ -189,7 +181,7 @@ function switchScreen(screenId) {
 
     document.querySelectorAll('.screen').forEach(el => el.classList.add('hidden'));
     const target = document.getElementById(screenId);
-    if (!target) { console.error("Screen not found:", screenId); return; } 
+    if (!target) return;
     target.classList.remove('hidden');
     
     if (screenId === 'screen-home') currentScreen = 'home';
@@ -215,7 +207,6 @@ function switchScreen(screenId) {
     if(screenId === 'screen-takeout') refreshTakeoutList();
 }
 
-// --- Global Room Update ---
 function updateGlobalRoomSelects() {
     const selects = ['add-room', 'edit-room', 'home-filter', 'takeout-filter'];
     const rooms = getCurrentRooms();
@@ -233,48 +224,24 @@ function updateGlobalRoomSelects() {
     });
 }
 
-// --- 渲染账号下拉菜单中的家庭列表 ---
+// --- 渲染菜单 ---
 function renderFamilyMenu() {
     const container = document.getElementById('menu-family-list');
     if (!container) return;
     container.innerHTML = '';
-
-    const allFams = FAMILY_DATA;
-
-    allFams.forEach((fam, index) => {
+    
+    FAMILY_DATA.forEach((fam, index) => {
         const isCurrent = fam.id === currentFamilyId;
         const btn = document.createElement('button');
         btn.className = `w-full text-left px-8 py-3 hover:bg-gray-100 font-bold flex justify-between items-center text-sm ${isCurrent ? 'bg-blue-50 text-blue-800' : 'text-gray-700'}`;
         btn.innerHTML = `<span>${fam.name}</span>${isCurrent ? '<span>✔</span>' : ''}`;
         btn.setAttribute('role', 'menuitem');
-        // 解决问题1：增加上下光标导航
-        btn.setAttribute('data-index', index);
-
-        btn.addEventListener('keydown', (e) => {
-            // 左光标：关闭子菜单，焦点回弹
-            if (e.key === 'ArrowLeft') {
-                e.preventDefault(); e.stopPropagation();
-                closeFamilySubmenu();
-            }
-            // 上光标：移到上一个家庭
-            else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                const prev = container.children[index - 1];
-                if (prev) prev.focus();
-            }
-            // 下光标：移到下一个家庭
-            else if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                const next = container.children[index + 1];
-                if (next) next.focus();
-            }
-        });
-
+        
+        // 点击切换
         btn.onclick = (e) => {
              e.stopPropagation();
              switchFamily(fam.id);
-             // 关闭所有菜单
-             document.getElementById('menu-account-dropdown').classList.add('hidden');
+             document.getElementById('menu-family-list').classList.add('hidden');
              document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false');
              document.getElementById('btn-account-menu').focus();
         };
@@ -282,27 +249,7 @@ function renderFamilyMenu() {
     });
 }
 
-function openFamilySubmenu() {
-    const list = document.getElementById('menu-family-list');
-    const trigger = document.getElementById('btn-family-submenu-trigger');
-    list.classList.remove('hidden');
-    trigger.setAttribute('aria-expanded', 'true');
-    // 焦点进入第一个家庭
-    const first = list.querySelector('button');
-    if(first) first.focus();
-}
-
-function closeFamilySubmenu() {
-    const list = document.getElementById('menu-family-list');
-    const trigger = document.getElementById('btn-family-submenu-trigger');
-    list.classList.add('hidden');
-    trigger.setAttribute('aria-expanded', 'false');
-    trigger.focus();
-}
-
-
-// --- ★★★ 账户设置 - 核心逻辑 ★★★ ---
-
+// --- Settings Logic ---
 const btnOpenSettings = document.getElementById('btn-open-settings');
 function openSettingsAction() {
     document.getElementById('menu-account-dropdown').classList.add('hidden');
@@ -321,7 +268,6 @@ if(btnOpenSettings) {
     });
 }
 
-// 保存用户名
 document.getElementById('btn-save-username').addEventListener('click', () => {
     const newName = document.getElementById('profile-username').value.trim();
     if(newName) {
@@ -330,7 +276,6 @@ document.getElementById('btn-save-username').addEventListener('click', () => {
     }
 });
 
-// 选项卡逻辑
 window.switchTab = function(tabName) {
     const tabs = ['profile', 'family', 'rooms'];
     tabs.forEach(t => {
@@ -377,12 +322,10 @@ document.getElementById('tab-btn-family').addEventListener('click', () => switch
 document.getElementById('tab-btn-rooms').addEventListener('click', () => switchTab('rooms'));
 document.getElementById('btn-back-settings').addEventListener('click', () => switchScreen('screen-home'));
 
-// --- 家庭管理逻辑 ---
 function refreshSettingsUI() {
     const famSelect = document.getElementById('settings-family-select');
     const roomFamSelect = document.getElementById('settings-room-family-select');
     
-    // 生成选项，标记当前使用的
     const generateOpts = () => FAMILY_DATA.map(f => {
         const tag = (f.id === currentFamilyId) ? ' (当前)' : '';
         return `<option value="${f.id}">${f.name}${tag}</option>`;
@@ -391,41 +334,32 @@ function refreshSettingsUI() {
     famSelect.innerHTML = generateOpts();
     roomFamSelect.innerHTML = generateOpts();
     
-    // 默认选中当前全局家庭
     famSelect.value = currentFamilyId;
     roomFamSelect.value = currentFamilyId;
 }
 
-// 家庭管理tab的 保存与取消
 document.getElementById('btn-family-tab-save').addEventListener('click', () => {
     const selectedId = document.getElementById('settings-family-select').value;
     switchFamily(selectedId);
     announce("已保存设置，已切换到所选家庭");
-    // 焦点回归
     document.getElementById('settings-family-select').focus();
 });
 document.getElementById('btn-family-tab-cancel').addEventListener('click', () => {
     refreshSettingsUI();
     announce("已取消更改");
-    // 焦点回归
     document.getElementById('settings-family-select').focus();
 });
 
-// 房间管理tab的 保存与取消
 document.getElementById('btn-room-tab-save').addEventListener('click', () => {
     announce("设置已保存");
-    // 焦点回归
     document.getElementById('btn-room-add-open').focus();
 });
 document.getElementById('btn-room-tab-cancel').addEventListener('click', () => {
     document.getElementById('settings-room-family-select').value = currentFamilyId;
     announce("已重置");
-     // 焦点回归
     document.getElementById('btn-room-add-open').focus();
 });
 
-
-// 新建家庭
 document.getElementById('btn-new-family').addEventListener('click', () => {
     document.getElementById('modal-family-new').classList.remove('hidden');
     document.getElementById('input-new-family-name').value = '';
@@ -440,12 +374,11 @@ document.getElementById('btn-confirm-new-family').addEventListener('click', () =
     
     const newId = 'f' + Date.now();
     FAMILY_DATA.push({ id: newId, name: name, location: loc, rooms: [...DEFAULT_ROOMS] });
-    switchFamily(newId); // 自动切换
+    switchFamily(newId);
     saveFamilyData();
     refreshSettingsUI();
     document.getElementById('modal-family-new').classList.add('hidden');
     announce(`已创建并切换到 ${name}`);
-    // 焦点回归
     setTimeout(() => document.getElementById('settings-family-select').focus(), 100);
 });
 
@@ -453,7 +386,6 @@ document.getElementById('btn-edit-family').addEventListener('click', () => {
     const famId = document.getElementById('settings-family-select').value;
     const fam = FAMILY_DATA.find(f => f.id === famId);
     if(!fam) return;
-    
     document.getElementById('modal-family-edit').classList.remove('hidden');
     document.getElementById('input-edit-family-name').value = fam.name;
     document.getElementById('input-edit-family-loc').value = fam.location || '';
@@ -474,7 +406,6 @@ document.getElementById('btn-confirm-edit-family').addEventListener('click', () 
             const display = document.getElementById('current-family-display');
             if(display) display.textContent = fam.name;
         }
-        // 焦点回归
         setTimeout(() => document.getElementById('settings-family-select').focus(), 100);
     }
 });
@@ -493,27 +424,21 @@ document.getElementById('btn-delete-family').addEventListener('click', () => {
         }
         refreshSettingsUI();
         announce("已删除");
-        // 焦点回归
         setTimeout(() => document.getElementById('settings-family-select').focus(), 100);
     }
 });
 
-// --- 房间管理逻辑 (深度重构) ---
-
-// 辅助：渲染新增房间模态框的内容
+// --- 新增房间 (复选框重构版) ---
 function renderAddRoomModalContent() {
     const famId = document.getElementById('settings-room-family-select').value;
     const fam = FAMILY_DATA.find(f => f.id === famId);
     if(!fam) return;
 
-    // 1. 简单的文本提示
     document.getElementById('room-add-existing-list').textContent = '勾选下列房间以添加，取消勾选以移除：';
 
-    // 2. 渲染“选择房间”列表 (复选框模式)
     const container = document.getElementById('room-add-recommend-container');
     container.innerHTML = '';
-    
-    // 增加语义分组，让读屏软件知道这是一个组
+    // 增加分组语义
     container.setAttribute('role', 'group');
     container.setAttribute('aria-label', '选择房间');
 
@@ -523,41 +448,39 @@ function renderAddRoomModalContent() {
         wrapper.className = 'flex items-center gap-2 p-3 bg-gray-50 rounded border border-gray-200 mb-2';
         
         const checkboxId = `chk-room-${index}`;
-        
         wrapper.innerHTML = `
             <input type="checkbox" id="${checkboxId}" class="w-6 h-6 text-blue-600 rounded focus:ring-blue-500" ${isOwned ? 'checked' : ''} value="${room}">
             <label for="${checkboxId}" class="text-lg font-bold text-gray-800 cursor-pointer select-none flex-grow">${room}</label>
         `;
-        
         container.appendChild(wrapper);
     });
 
-    // 关键修复：内容重新渲染后，必须重新绑定 Focus Trap，否则 Tab 键会跳过新生成的复选框
-    // 我们先移除旧的监听器（通过克隆节点替换），再绑定新的
+    // 重新计算焦点陷阱，确保 TAB 能访问到新生成的复选框
+    // 强制重新绑定
     const modal = document.getElementById('modal-room-add');
     const newModal = modal.cloneNode(true);
     modal.parentNode.replaceChild(newModal, modal);
-    
-    // 重新绑定所有事件
+
+    // 重新绑定事件
     document.getElementById('btn-confirm-add-room').addEventListener('click', confirmAddRoomAction);
     document.getElementById('btn-cancel-add-room').addEventListener('click', () => {
         document.getElementById('modal-room-add').classList.add('hidden');
         document.getElementById('btn-room-add-open').focus();
     });
+    document.getElementById('btn-room-add-open').focus(); // 临时焦点
     
-    // 重新激活焦点陷阱
+    // 重新激活动态陷阱
     safeTrapFocus('modal-room-add');
 }
 
-// 打开新增房间
 document.getElementById('btn-room-add-open').addEventListener('click', () => {
     document.getElementById('modal-room-add').classList.remove('hidden');
     document.getElementById('input-new-room-name').value = '';
-    renderAddRoomModalContent(); // 重新渲染列表
+    renderAddRoomModalContent();
     document.getElementById('title-room-add').focus();
 });
 
-// 提取为命名函数，以便重新绑定
+// 提取确认添加房间的逻辑
 window.confirmAddRoomAction = () => {
     const famId = document.getElementById('settings-room-family-select').value;
     const fam = FAMILY_DATA.find(f => f.id === famId);
@@ -565,7 +488,6 @@ window.confirmAddRoomAction = () => {
 
     let changeCount = 0;
     
-    // 1. 处理复选框
     const checkboxes = document.querySelectorAll('#room-add-recommend-container input[type="checkbox"]');
     checkboxes.forEach(chk => {
         const roomName = chk.value;
@@ -575,7 +497,6 @@ window.confirmAddRoomAction = () => {
                 changeCount++;
             }
         } else {
-            // 取消勾选 = 删除 (仅限默认列表内的)
             if (fam.rooms.includes(roomName)) {
                 fam.rooms = fam.rooms.filter(r => r !== roomName);
                 changeCount++;
@@ -583,7 +504,6 @@ window.confirmAddRoomAction = () => {
         }
     });
 
-    // 2. 自定义输入
     const customName = document.getElementById('input-new-room-name').value.trim();
     if (customName && !fam.rooms.includes(customName)) {
         fam.rooms.push(customName);
@@ -597,34 +517,30 @@ window.confirmAddRoomAction = () => {
     } else {
         announce("没有检测到变动");
     }
-    
     setTimeout(() => document.getElementById('btn-room-add-open').focus(), 100);
 };
 
 // 初始绑定
 document.getElementById('btn-confirm-add-room').addEventListener('click', confirmAddRoomAction);
 
-// 删除房间 (独立页面)
 document.getElementById('btn-room-delete-open').addEventListener('click', () => {
     const famId = document.getElementById('settings-room-family-select').value;
     const fam = FAMILY_DATA.find(f => f.id === famId);
     if(!fam) return;
-
+    
     switchScreen('screen-room-list-delete');
     const container = document.getElementById('container-room-delete-list');
     container.innerHTML = '';
-
-    // 渲染列表函数，方便递归调用
+    
     const renderDelList = () => {
         container.innerHTML = '';
         if(fam.rooms.length === 0) {
             container.innerHTML = '<p class="text-gray-500 font-bold">没有可删除的房间</p>';
-            // 焦点移回返回按钮，防止迷路
             document.getElementById('btn-back-room-list').focus();
             return;
         }
-
-        fam.rooms.forEach((room, idx) => {
+        
+        fam.rooms.forEach((room) => {
             const div = document.createElement('div');
             div.className = 'room-del-item';
             div.innerHTML = `
@@ -637,11 +553,7 @@ document.getElementById('btn-room-delete-open').addEventListener('click', () => 
                     fam.rooms = fam.rooms.filter(r => r !== room);
                     saveFamilyData();
                     announce(`已删除 ${room}`);
-
-                    // 重新渲染
                     renderDelList();
-
-                    // 解决问题6：将焦点移动到新的列表第一个删除按钮，或返回按钮
                     setTimeout(() => {
                         const firstBtn = container.querySelector('.room-del-btn');
                         if(firstBtn) firstBtn.focus();
@@ -652,7 +564,7 @@ document.getElementById('btn-room-delete-open').addEventListener('click', () => 
             container.appendChild(div);
         });
     };
-
+    
     renderDelList();
     document.getElementById('title-room-list-delete').focus();
 });
@@ -660,11 +572,9 @@ document.getElementById('btn-room-delete-open').addEventListener('click', () => 
 document.getElementById('btn-back-room-list').addEventListener('click', () => {
     switchScreen('screen-settings');
     switchTab('rooms');
-    // 焦点回归
     setTimeout(() => document.getElementById('btn-room-delete-open').focus(), 100);
 });
 
-// 模态框通用取消按钮
 document.getElementById('btn-cancel-new-family').addEventListener('click', () => {
     document.getElementById('modal-family-new').classList.add('hidden');
     document.getElementById('btn-new-family').focus();
@@ -678,26 +588,23 @@ document.getElementById('btn-cancel-add-room').addEventListener('click', () => {
     document.getElementById('btn-room-add-open').focus();
 });
 
-
 // --- Auth & Init ---
 onAuthStateChanged(auth, user => {
     if (user) {
         const curFam = FAMILY_DATA.find(f => f.id === currentFamilyId);
         const famName = curFam ? curFam.name : '未知家庭';
 
-        // 解决问题4：完善朗读信息
         const menuBtn = document.getElementById('btn-account-menu');
         if(menuBtn) menuBtn.setAttribute('aria-label', `当前账号：${user.email}，当前家庭：${famName}，点击展开菜单`);
-
+        
         const emailDisplay = document.getElementById('user-email-display');
         if(emailDisplay) emailDisplay.textContent = user.email.split('@')[0];
-
+        
         switchScreen('screen-home');
-
-        // 初始化家庭逻辑
+        
         updateGlobalRoomSelects();
         renderFamilyMenu();
-
+        
         if(curFam) {
             const display = document.getElementById('current-family-display');
             if(display) display.textContent = curFam.name;
@@ -705,24 +612,34 @@ onAuthStateChanged(auth, user => {
 
         setupDataListener(user.uid);
     } else {
-        // ... else 逻辑不变 ...
         if(unsubscribeItems) unsubscribeItems();
         allItems = [];
         switchScreen('screen-login');
     }
 });
 
-// --- Focus Trap ---
+// --- Focus Trap (Fixed: Dynamic Calculation) ---
 function safeTrapFocus(id) {
     const el = document.getElementById(id);
     if (!el) return;
-    const focusableElementsString = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    const focusableContent = el.querySelectorAll(focusableElementsString);
-    if (focusableContent.length === 0) return;
-    const firstFocusableElement = focusableContent[0];
-    const lastFocusableElement = focusableContent[focusableContent.length - 1];
-    el.addEventListener('keydown', function(e) {
+    
+    // 移除之前的监听器（防止重复）
+    const newEl = el.cloneNode(true);
+    if(el.parentNode) el.parentNode.replaceChild(newEl, el);
+    
+    // 重新获取引用
+    const activeEl = document.getElementById(id);
+    
+    activeEl.addEventListener('keydown', function(e) {
         if (e.key === 'Tab') {
+            const focusableElementsString = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+            // 每次按键时动态计算，确保能捕获到新加的复选框
+            const focusableContent = activeEl.querySelectorAll(focusableElementsString);
+            if (focusableContent.length === 0) return;
+            
+            const firstFocusableElement = focusableContent[0];
+            const lastFocusableElement = focusableContent[focusableContent.length - 1];
+
             if (e.shiftKey) { 
                 if (document.activeElement === firstFocusableElement) {
                     e.preventDefault(); lastFocusableElement.focus();
@@ -737,7 +654,6 @@ function safeTrapFocus(id) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 绑定 Trap
     safeTrapFocus('modal-action');
     safeTrapFocus('modal-qty');
     safeTrapFocus('modal-unit');
@@ -747,8 +663,7 @@ document.addEventListener('DOMContentLoaded', () => {
     safeTrapFocus('modal-family-new');
     safeTrapFocus('modal-family-edit');
     safeTrapFocus('modal-room-add');
-
-// 绑定登录逻辑
+    
     const btnLogin = document.getElementById('btn-login');
     const inputPass = document.getElementById('login-password');
     
@@ -765,14 +680,11 @@ document.addEventListener('DOMContentLoaded', () => {
         btnLogin.addEventListener('click', async () => {
             const emailInput = document.getElementById('login-email');
             const passInput = document.getElementById('login-password');
-            
             if (!emailInput || !passInput) return;
             const e = emailInput.value;
             const p = passInput.value;
-            
             const autoLogin = document.getElementById('chk-auto-login').checked;
             const rememberEmail = document.getElementById('chk-remember-email').checked;
-            
             if(rememberEmail) localStorage.setItem('savedEmail', e); else localStorage.removeItem('savedEmail');
             
             btnLogin.textContent = "登录中...";
@@ -787,61 +699,72 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert("登录失败：" + err.message); 
                 btnLogin.textContent = "登录";
                 btnLogin.disabled = false;
-btnLogin.classList.remove('opacity-50');
+                btnLogin.classList.remove('opacity-50');
             }
         });
     }
     
-    // 解决问题4：删除所有自定义下拉框朗读代码，回归原生
-
-    // 解决问题1：重写菜单交互 (右光标展开，左光标折叠)
-    const btnSubmenu = document.getElementById('btn-family-submenu-trigger');
+    // 菜单交互重写：标准键盘导航
+    const btnSubmenu = document.getElementById('btn-account-menu'); // 注意：这里修复为外层菜单按钮，如果是切换家庭子菜单则是 family-submenu
+    const btnFamilyTrigger = document.getElementById('btn-family-submenu-trigger');
     const menuList = document.getElementById('menu-family-list');
 
-    if (btnSubmenu && menuList) {
-        // 展开函数
+    // 1. 账户大菜单
+    if(btnSubmenu) {
+        btnSubmenu.addEventListener('click', (e) => {
+            e.stopPropagation(); playSound('click');
+            const menu = document.getElementById('menu-account-dropdown');
+            menu.classList.toggle('hidden');
+            if(!menu.classList.contains('hidden')) {
+                btnSubmenu.setAttribute('aria-expanded', 'true');
+                renderFamilyMenu();
+                setTimeout(() => {
+                   const first = menu.querySelector('button');
+                   if(first) first.focus();
+                }, 50);
+            } else {
+                btnSubmenu.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+
+    // 2. 切换家庭子菜单
+    if (btnFamilyTrigger && menuList) {
         const openMenu = () => {
             menuList.classList.remove('hidden');
-            btnSubmenu.setAttribute('aria-expanded', 'true');
-            // 焦点直接进第一个选项
+            btnFamilyTrigger.setAttribute('aria-expanded', 'true');
             const first = menuList.querySelector('button');
             if(first) first.focus();
         };
 
-        // 折叠函数
         const closeMenu = () => {
             menuList.classList.add('hidden');
-            btnSubmenu.setAttribute('aria-expanded', 'false');
-            btnSubmenu.focus();
+            btnFamilyTrigger.setAttribute('aria-expanded', 'false');
+            btnFamilyTrigger.focus();
         };
 
-        // 绑定触发器事件
-        btnSubmenu.addEventListener('keydown', (e) => {
-            // 右光标、空格、回车 -> 展开
+        // 触发器事件
+        btnFamilyTrigger.addEventListener('keydown', (e) => {
             if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') {
                 e.preventDefault(); e.stopPropagation();
                 openMenu();
             }
         });
-        
-        // 绑定触发器点击
-        btnSubmenu.addEventListener('click', (e) => {
+        btnFamilyTrigger.addEventListener('click', (e) => {
             e.stopPropagation();
             if (menuList.classList.contains('hidden')) openMenu(); else closeMenu();
         });
 
-        // 绑定列表内事件 (事件委托)
+        // 列表键盘代理
         menuList.addEventListener('keydown', (e) => {
             const current = document.activeElement;
             const items = Array.from(menuList.querySelectorAll('button'));
             const idx = items.indexOf(current);
 
-            // 左光标 -> 折叠并回退
             if (e.key === 'ArrowLeft') {
                 e.preventDefault(); e.stopPropagation();
                 closeMenu();
             }
-            // 上下光标 -> 循环浏览
             else if (e.key === 'ArrowDown') {
                 e.preventDefault();
                 const next = items[idx + 1] || items[0];
@@ -854,55 +777,19 @@ btnLogin.classList.remove('opacity-50');
             }
         });
     }
-});
-    const btnSubmenu = document.getElementById('btn-family-submenu-trigger');
-    if (btnSubmenu) {
-        // 点击事件
-        btnSubmenu.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const list = document.getElementById('menu-family-list');
-            if (list.classList.contains('hidden')) openFamilySubmenu();
-            else closeFamilySubmenu();
-        });
-        
-        // 键盘事件 - 强制捕获 ArrowRight
-        btnSubmenu.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowRight' || e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
-                e.preventDefault(); // 关键：阻止浏览器默认行为
-                e.stopPropagation();
-                openFamilySubmenu(); 
-            }
-        });
-    }
-});
 
-const btnAccount = document.getElementById('btn-account-menu');
-const menuAccount = document.getElementById('menu-account-dropdown');
-if(btnAccount && menuAccount) {
-    btnAccount.addEventListener('click', (e) => {
-        e.stopPropagation(); playSound('click');
-        menuAccount.classList.toggle('hidden');
-        if(!menuAccount.classList.contains('hidden')) {
-            document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'true');
-            // 每次打开菜单，重新渲染家庭列表，确保最新
-            renderFamilyMenu();
-            setTimeout(() => {
-                const firstBtn = menuAccount.querySelector('button');
-                if(firstBtn) firstBtn.focus();
-            }, 50);
-        } else { document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false'); }
-    });
     document.addEventListener('click', (e) => {
-        if (!btnAccount.contains(e.target) && !menuAccount.contains(e.target)) {
-            menuAccount.classList.add('hidden');
-            document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false');
+        const menu = document.getElementById('menu-account-dropdown');
+        if (btnSubmenu && !btnSubmenu.contains(e.target) && !menu.contains(e.target)) {
+            menu.classList.add('hidden');
+            if(btnSubmenu) btnSubmenu.setAttribute('aria-expanded', 'false');
         }
     });
-}
+});
 
 document.getElementById('btn-logout').addEventListener('click', () => signOut(auth).then(() => announce("已退出")));
 document.getElementById('btn-clear-data').addEventListener('click', () => {
-    menuAccount.classList.add('hidden');
+    document.getElementById('menu-account-dropdown').classList.add('hidden');
     openGenericConfirm("确定清空数据？", async () => {
         const batch = writeBatch(db);
         const q = query(itemsRef, where("uid", "==", auth.currentUser.uid));
@@ -912,7 +799,7 @@ document.getElementById('btn-clear-data').addEventListener('click', () => {
     });
 });
 document.getElementById('btn-delete-account').addEventListener('click', () => {
-    menuAccount.classList.add('hidden');
+    document.getElementById('menu-account-dropdown').classList.add('hidden');
     openGenericConfirm("确定删除账号？", async () => {
         const batch = writeBatch(db);
         const q = query(itemsRef, where("uid", "==", auth.currentUser.uid));
@@ -932,8 +819,7 @@ document.getElementById('btn-submit-reg').addEventListener('click', () => {
 document.getElementById('btn-forgot-pass').addEventListener('click', () => {
     document.getElementById('modal-forgot').classList.remove('hidden'); setTimeout(() => document.getElementById('title-forgot').focus(), 100);
 });
-const btnCancelForgot = document.getElementById('btn-cancel-forgot');
-if(btnCancelForgot) btnCancelForgot.addEventListener('click', () => document.getElementById('modal-forgot').classList.add('hidden'));
+document.getElementById('btn-cancel-forgot').addEventListener('click', () => document.getElementById('modal-forgot').classList.add('hidden'));
 
 document.getElementById('btn-send-reset').addEventListener('click', () => {
     const e = document.getElementById('forgot-email').value; if(!e) return;
@@ -975,7 +861,6 @@ function setupDataListener(uid) {
     });
 }
 
-// --- List Renderers ---
 function refreshHomeList() { 
     const catSelect = document.getElementById('home-filter-cat');
     if (catSelect.value !== homeFilterCategory) { catSelect.value = homeFilterCategory; }
@@ -1000,16 +885,10 @@ function refreshResultsList() {
 
 function renderList(containerId, filterRoom, filterCat, sourceArray) {
     const container = document.getElementById(containerId);
-    
-    // 获取当前家庭的房间列表
     const currentRooms = getCurrentRooms();
 
     const filtered = sourceArray.filter(item => {
-        // 关键逻辑：如果物品所在的房间，不属于当前家庭的房间列表，则隐藏
-        // 这有效解决了“切换家庭后旧物品残留”的问题（前提是不同家庭不使用完全一样的房间名，或者能接受重名房间物品混在一起）
-        // 更好的方案是后端数据加familyId，但前端方案目前最快
         if (!currentRooms.includes(item.room)) return false;
-
         const roomMatch = filterRoom === 'all' || item.room === filterRoom;
         const catMatch = filterCat === 'all' || item.category === filterCat;
         return roomMatch && catMatch;
@@ -1088,13 +967,11 @@ function updateStats(items) {
     }
 }
 
-// --- Filters ---
 document.getElementById('home-filter').addEventListener('change', (e) => { homeFilterRoom = e.target.value; refreshHomeList(); });
 document.getElementById('home-filter-cat').addEventListener('change', (e) => { homeFilterCategory = e.target.value; refreshHomeList(); });
 document.getElementById('takeout-filter').addEventListener('change', (e) => { takeoutFilterRoom = e.target.value; refreshTakeoutList(); });
 document.getElementById('takeout-filter-cat').addEventListener('change', (e) => { takeoutFilterCategory = e.target.value; refreshTakeoutList(); });
 
-// --- Search Logic ---
 const setupSearch = (inputId, btnId, clearBtnId, context) => {
     const input = document.getElementById(inputId);
     const btn = document.getElementById(btnId);
@@ -1126,7 +1003,6 @@ document.getElementById('btn-back-results').addEventListener('click', (e) => {
     switchScreen(ctx === 'takeout' ? 'screen-takeout' : 'screen-home');
 });
 
-// --- Tag Management Logic ---
 function addTag(tagText, containerId, inputId) {
     const cleanTag = tagText.trim();
     if(!cleanTag) return;
@@ -1178,7 +1054,6 @@ function setupTagInput(inputId, btnId, containerId) {
 setupTagInput('add-tags-input', 'btn-add-tag-trigger', 'add-tags-container');
 setupTagInput('edit-tags-input', 'btn-edit-tag-trigger', 'edit-tags-container');
 
-// --- Auto Inference ---
 function attemptInference(name) {
     if(!name) return;
     let predictedCat = null;
@@ -1212,7 +1087,6 @@ function attemptInference(name) {
 }
 document.getElementById('add-name').addEventListener('blur', (e) => attemptInference(e.target.value.trim()));
 
-// --- Navigation Handlers ---
 document.getElementById('btn-nav-takeout').addEventListener('click', () => switchScreen('screen-takeout'));
 document.getElementById('btn-back-takeout').addEventListener('click', () => switchScreen('screen-home'));
 
@@ -1285,7 +1159,6 @@ function cancelEdit() {
 document.getElementById('btn-back-edit').addEventListener('click', cancelEdit);
 document.getElementById('btn-cancel-edit-form').addEventListener('click', cancelEdit);
 
-// Unit Picker
 let unitTargetInput = null;
 const unitGrid = document.getElementById('unit-grid');
 function initUnitGrid() {
@@ -1308,7 +1181,6 @@ window.closeUnitModal = () => { document.getElementById('modal-unit').classList.
 document.getElementById('btn-pick-unit-add').addEventListener('click', () => openUnitPicker('add-unit'));
 document.getElementById('btn-pick-unit-edit').addEventListener('click', () => openUnitPicker('edit-unit'));
 
-// Edit Execution
 document.getElementById('form-edit').addEventListener('submit', async (e) => {
     e.preventDefault();
     const newQty = parseInt(document.getElementById('edit-quantity').value);
@@ -1343,7 +1215,6 @@ function openZeroConfirmEdit(newQty) {
     document.getElementById('btn-zero-cancel').onclick = () => { m.classList.add('hidden'); announce("已取消"); };
 }
 
-// Action Menu
 function openActionMenu(item) {
     playSound('click');
     const freshItem = allItems.find(i => i.id === item.id) || item;
@@ -1381,7 +1252,6 @@ function openEditScreen(item) {
     renderTags('edit-tags-container', 'edit-tags-input');
 }
 
-// Qty Picker (Fixed Focus Logic)
 let qtyCallback = null;
 const qtyGrid = document.getElementById('qty-grid');
 qtyGrid.innerHTML = '';
@@ -1469,7 +1339,6 @@ document.getElementById('btn-confirm-ok').addEventListener('click', () => { if(c
 document.getElementById('btn-confirm-cancel').addEventListener('click', () => closeModals());
 async function execDelete() { try { await deleteDoc(doc(db, "items", currentActionItem.id)); announce("已删除"); closeModals(); } catch(e) { announce("删除失败"); } }
 
-// Export/Import
 document.getElementById('btn-export').addEventListener('click', () => {
     let csvContent = "\uFEFF物品名称,分类,标签,房间,具体位置,数量,单位\n"; 
     allItems.forEach(item => { 
@@ -1509,7 +1378,6 @@ document.getElementById('file-upload').addEventListener('change', (e) => {
     }; reader.readAsText(file);
 });
 
-// Global Keydown
 window.addEventListener('keydown', (e) => {
     if(e.key === 'Escape') {
         if (currentScreen === 'edit') return; 
