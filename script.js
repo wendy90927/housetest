@@ -99,15 +99,20 @@ let currentFamilyRooms = []; // 当前家庭已拥有的房间
             }
         }
 
-        const savedEmail = localStorage.getItem('savedEmail');
-        if(savedEmail) document.getElementById('login-email').value = savedEmail;
-
+let announceTimer = null;
         window.announce = (msg, type = 'normal') => {
             const el = document.getElementById('live-announcer');
-            el.textContent = msg;
-            if (msg.includes("成功") || msg.includes("已添加") || msg.includes("已删除") || msg.includes("自动填入")) playSound('success');
-            else if (msg.includes("失败") || msg.includes("错误") || msg.includes("不足") || msg.includes("未找到")) playSound('error');
-            setTimeout(() => el.textContent = '', 1000);
+            if (announceTimer) clearTimeout(announceTimer);
+            
+            el.textContent = ''; // 先清空，确保读屏软件能检测到内容变化
+            
+            setTimeout(() => {
+                el.textContent = msg;
+                if (msg.includes("成功") || msg.includes("已添加") || msg.includes("已删除") || msg.includes("已更新") || msg.includes("自动填入")) playSound('success');
+                else if (msg.includes("失败") || msg.includes("错误") || msg.includes("不足") || msg.includes("未找到")) playSound('error');
+            }, 50);
+
+            announceTimer = setTimeout(() => el.textContent = '', 3000);
         };
 
         // --- Focus Trap ---
@@ -543,7 +548,6 @@ loadUserFamilies(user);
             switchScreen('screen-settings');
             // 默认打开第一个标签
             switchSettingsTab('tab-profile');
-            announce("进入账户与家庭管理");
         });
 
         document.getElementById('btn-back-settings').addEventListener('click', () => switchScreen('screen-home'));
@@ -655,7 +659,6 @@ function renderProfileUI() {
             const box = document.getElementById('box-identity-custom');
             if (e.target.value === '自定义') {
                 box.classList.remove('hidden');
-                document.getElementById('set-identity-custom').focus();
             } else {
                 box.classList.add('hidden');
             }
@@ -1067,11 +1070,20 @@ function renderProfileUI() {
             }
         }
         
-        // 当家庭下拉框在“房间管理”面板被改变时，刷新数据
-        document.getElementById('room-family-select').addEventListener('change', (e) => {
-             // 上面的 change 事件已经更新了 currentFamilyId
-             // 这里手动触发 tab 点击事件来刷新数据
-             document.getElementById('tab-rooms').click();
+document.getElementById('room-family-select').addEventListener('change', async (e) => {
+             currentFamilyId = e.target.value;
+             if (!currentFamilyId) return;
+             
+             // 直接刷新数据，不转移焦点
+             const famDoc = await getDoc(doc(db, "families", currentFamilyId));
+             if (famDoc.exists()) {
+                currentFamilyRooms = famDoc.data().rooms || [];
+             } else {
+                currentFamilyRooms = [];
+             }
+             renderManagedRooms();
+             renderPresetKeyboardList();
+             announce("已切换家庭，房间列表已更新");
         });
 
         document.getElementById('btn-back-data').addEventListener('click', () => switchScreen('screen-home'));

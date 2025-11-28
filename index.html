@@ -551,6 +551,27 @@
             </div>
         </div>
     </div>
+
+<div id="modal-change-pass" class="hidden fixed inset-0 bg-black bg-opacity-70 z-50 flex justify-center items-center">
+        <div class="bg-white w-full max-w-sm p-6 rounded-2xl shadow-2xl text-center border-4 border-blue-300" role="dialog" aria-modal="true" aria-labelledby="title-change-pass">
+            <h2 id="title-change-pass" class="text-2xl font-bold mb-4 outline-none" tabindex="-1">修改登录密码</h2>
+            <div class="text-left space-y-4">
+                <div>
+                    <label for="input-new-pass" class="block font-bold mb-1">新密码 (至少6位)</label>
+                    <input type="password" id="input-new-pass" class="w-full p-3 border-2 border-gray-300 rounded-lg" placeholder="新密码">
+                </div>
+                <div>
+                    <label for="input-confirm-pass" class="block font-bold mb-1">确认新密码</label>
+                    <input type="password" id="input-confirm-pass" class="w-full p-3 border-2 border-gray-300 rounded-lg" placeholder="再次输入">
+                </div>
+            </div>
+            <div class="flex gap-4 mt-6">
+                <button id="btn-pass-cancel" class="flex-1 p-3 bg-gray-200 font-bold rounded-lg text-lg">取消</button>
+                <button id="btn-pass-save" class="flex-1 p-3 bg-blue-600 text-white font-bold rounded-lg text-lg">确认修改</button>
+            </div>
+        </div>
+    </div>
+
 <script type="module" src="script.js"></script>
 </body>
 </html>
