@@ -904,19 +904,20 @@ document.getElementById('manage-family-select').focus();
             });
         });
 
-// --- Room Management Logic ---
-        
-// 切换到房间面板时：仅同步数据，不再渲染复杂界面
-        document.getElementById('tab-rooms').addEventListener('click', async () => {
-             // 确保当前有选中的家庭
-             const famId = document.getElementById('room-family-select').value;
+// 安全监听辅助函数 (防止因找不到元素导致脚本中断)
+        function safeListen(id, event, handler) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener(event, handler);
+            }
+        }
+
+        // 切换到房间面板时：仅同步数据
+        safeListen('tab-rooms', 'click', async () => {
+             const famId = document.getElementById('room-family-select') ? document.getElementById('room-family-select').value : null;
              if(famId) currentFamilyId = famId;
+             if (!currentFamilyId) return;
              
-             if (!currentFamilyId) {
-                // 如果没有家庭，提示用户
-                return; 
-             }
-             // 重新获取该家庭的最新房间数据
              const famDoc = await getDoc(doc(db, "families", currentFamilyId));
              if (famDoc.exists()) {
                 currentFamilyRooms = famDoc.data().rooms || [];
@@ -926,25 +927,27 @@ document.getElementById('manage-family-select').focus();
         });
 
         // 按钮：进入“新增房间”界面
-        document.getElementById('btn-to-room-add').addEventListener('click', () => {
+        safeListen('btn-to-room-add', 'click', () => {
             if(!currentFamilyId) { announce("请先选择一个家庭"); return; }
             switchScreen('screen-room-add');
-            renderPresetKeyboardList(); // 渲染预设列表
-            document.getElementById('input-custom-room').value = '';
-            announce("进入新增房间界面，请选择预设或输入自定义名称");
+            renderPresetKeyboardList();
+            const input = document.getElementById('input-custom-room');
+            if(input) input.value = '';
+            announce("进入新增房间界面");
         });
 
         // 按钮：进入“删除房间”界面
-        document.getElementById('btn-to-room-del').addEventListener('click', () => {
+        safeListen('btn-to-room-del', 'click', () => {
             if(!currentFamilyId) { announce("请先选择一个家庭"); return; }
             switchScreen('screen-room-del');
-            renderDeleteRoomList(); // 渲染删除列表
-            announce("进入删除房间界面，点击按钮即可删除对应房间");
+            renderDeleteRoomList();
+            announce("进入删除房间界面");
         });
 
         // 逻辑：渲染删除列表
         function renderDeleteRoomList() {
             const container = document.getElementById('list-delete-rooms');
+            if(!container) return;
             container.innerHTML = '';
             if(currentFamilyRooms.length === 0) {
                 container.innerHTML = '<p class="text-gray-500 text-lg font-bold">当前没有任何房间。</p>';
@@ -957,22 +960,58 @@ document.getElementById('manage-family-select').focus();
                 btn.onclick = () => {
                     openGenericConfirm(`确定要永久删除“${room}”吗？`, async () => {
                         currentFamilyRooms = currentFamilyRooms.filter(r => r !== room);
-                        await saveRoomsToFirestore(); // 复用已有的保存函数
-                        renderDeleteRoomList(); // 刷新列表
-                        // 焦点管理：尝试聚焦到列表第一个，如果空了就聚焦返回按钮
+                        await saveRoomsToFirestore();
+                        renderDeleteRoomList();
                         const firstBtn = container.querySelector('button');
                         if(firstBtn) firstBtn.focus();
-                        else document.getElementById('btn-back-from-del-room').focus();
+                        else {
+                            const backBtn = document.getElementById('btn-back-from-del-room');
+                            if(backBtn) backBtn.focus();
+                        }
                     });
                 };
                 container.appendChild(btn);
             });
         }
 
-// 切换选中状态 (读屏优化版)
+        // 渲染预设房间列表
+        function renderPresetKeyboardList() {
+            const container = document.getElementById('preset-room-list');
+            if(!container) return;
+            container.innerHTML = '';
+            pendingSelectedDefaults.clear(); 
+            const availableDefaults = SYSTEM_ROOMS.filter(r => !currentFamilyRooms.includes(r));
+            if (availableDefaults.length === 0) {
+                container.innerHTML = '<div class="p-4 text-gray-500 font-bold" tabindex="0">常用房间都已添加完毕。</div>';
+                return;
+            }
+            availableDefaults.forEach((room, index) => {
+                const div = document.createElement('div');
+                div.className = "flex items-center gap-3 p-3 rounded-lg cursor-pointer border-2 border-transparent mb-2 bg-white";
+                div.setAttribute('role', 'checkbox');
+                div.setAttribute('aria-checked', 'false'); 
+                div.setAttribute('tabindex', index === 0 ? '0' : '-1'); 
+                div.dataset.room = room;
+                const chk = document.createElement('div');
+                chk.className = "w-6 h-6 border-2 border-gray-400 rounded flex items-center justify-center chk-box mr-2";
+                const text = document.createElement('span');
+                text.className = "text-xl font-bold";
+                text.textContent = room;
+                div.appendChild(chk);
+                div.appendChild(text);
+                const toggle = (e) => { e.preventDefault(); togglePresetSelection(div, chk); };
+                div.addEventListener('click', toggle);
+                div.addEventListener('keydown', (e) => {
+                    if (e.key === ' ' || e.key === 'Enter') toggle(e);
+                    else if (e.key === 'ArrowDown') { e.preventDefault(); moveFocus(div, 'next'); }
+                    else if (e.key === 'ArrowUp') { e.preventDefault(); moveFocus(div, 'prev'); }
+                });
+                container.appendChild(div);
+            });
+        }
+
         function togglePresetSelection(el, chkIcon) {
             const room = el.dataset.room;
-            
             if (pendingSelectedDefaults.has(room)) {
                 pendingSelectedDefaults.delete(room);
                 el.setAttribute('aria-checked', 'false');
@@ -992,7 +1031,6 @@ document.getElementById('manage-family-select').focus();
             }
         }
 
-        // 焦点移动辅助
         function moveFocus(currentEl, dir) {
             const sibling = dir === 'next' ? currentEl.nextElementSibling : currentEl.previousElementSibling;
             if (sibling && sibling.getAttribute('role') === 'checkbox') {
@@ -1002,7 +1040,6 @@ document.getElementById('manage-family-select').focus();
             }
         }
 
-// 辅助：保存房间到数据库 (新界面复用)
         async function saveRoomsToFirestore() {
             if (!currentFamilyId) return;
             try {
@@ -1016,17 +1053,15 @@ document.getElementById('manage-family-select').focus();
             }
         }
 
-        // --- 新增房间界面的逻辑 ---
-        
-        // 1. 新增房间界面的“取消”按钮
-        document.getElementById('btn-back-from-add-room').addEventListener('click', () => {
+        // 房间管理界面的返回与保存逻辑
+        safeListen('btn-back-from-add-room', 'click', () => {
             switchScreen('screen-settings');
-            document.getElementById('tab-rooms').click(); 
-            announce("已取消，返回房间管理");
+            const tab = document.getElementById('tab-rooms');
+            if(tab) tab.click();
+            announce("已取消");
         });
 
-        // 2. 新增房间界面的“保存并返回”按钮
-        document.getElementById('btn-confirm-add-rooms').addEventListener('click', async () => {
+        safeListen('btn-confirm-add-rooms', 'click', async () => {
              const customName = document.getElementById('input-custom-room').value.trim();
              if(customName) {
                  if(currentFamilyRooms.includes(customName)) {
@@ -1035,51 +1070,42 @@ document.getElementById('manage-family-select').focus();
                      pendingSelectedDefaults.add(customName);
                  }
              }
-
-             if (pendingSelectedDefaults.size === 0) {
-                announce("未选择任何新房间");
-                return;
-             }
-             
+             if (pendingSelectedDefaults.size === 0) { announce("未选择任何新房间"); return; }
              pendingSelectedDefaults.forEach(r => {
                  if (!currentFamilyRooms.includes(r)) currentFamilyRooms.push(r);
              });
-             
              await saveRoomsToFirestore();
              announce(`成功添加 ${pendingSelectedDefaults.size} 个房间`);
-             
              switchScreen('screen-settings');
-             document.getElementById('tab-rooms').click();
+             const tab = document.getElementById('tab-rooms');
+             if(tab) tab.click();
         });
 
-        // --- 删除房间界面的逻辑 ---
-        
-        document.getElementById('btn-back-from-del-room').addEventListener('click', () => {
+        safeListen('btn-back-from-del-room', 'click', () => {
             switchScreen('screen-settings');
-            document.getElementById('tab-rooms').click();
+            const tab = document.getElementById('tab-rooms');
+            if(tab) tab.click();
             announce("返回房间管理");
         });
         
-        // 监听家庭下拉框变化 (修复)
-        document.getElementById('room-family-select').addEventListener('change', (e) => {
-             document.getElementById('tab-rooms').click();
+        safeListen('room-family-select', 'change', (e) => {
+             const tab = document.getElementById('tab-rooms');
+             if(tab) tab.click();
         });
 
-        document.getElementById('btn-back-data').addEventListener('click', () => switchScreen('screen-home'));
+        safeListen('btn-back-data', 'click', () => switchScreen('screen-home'));
         
-        document.getElementById('btn-add-qty-trigger').addEventListener('click', () => {
+        safeListen('btn-add-qty-trigger', 'click', () => {
             openQtyPicker("初始数量", (val) => {
                 pendingAddQty = val;
                 updateAddQtyDisplay();
             });
         });
 
-        // 修改: 提交后不跳转，重置表单并聚焦 Name 输入框
-        document.getElementById('form-add').addEventListener('submit', async (e) => {
+        safeListen('form-add', 'submit', async (e) => {
             e.preventDefault();
             const name = document.getElementById('add-name').value.trim();
             if(!name) return;
-            
             try {
                 await addDoc(itemsRef, {
                     name: name,
@@ -1101,11 +1127,10 @@ document.getElementById('manage-family-select').focus();
                 document.getElementById('add-name').focus();
             } catch(err) {
                 announce("添加失败");
-                console.error(err);
             }
         });
 
-        document.getElementById('btn-cancel-add').addEventListener('click', () => {
+        safeListen('btn-cancel-add', 'click', () => {
             switchScreen('screen-home');
             announce("已取消");
         });
@@ -1115,13 +1140,14 @@ document.getElementById('manage-family-select').focus();
             if(currentActionItem) focusTargetId = currentActionItem.id;
             switchScreen('screen-' + previousScreen);
         }
-        document.getElementById('btn-back-edit').addEventListener('click', cancelEdit);
-        document.getElementById('btn-cancel-edit-form').addEventListener('click', cancelEdit);
+        safeListen('btn-back-edit', 'click', cancelEdit);
+        safeListen('btn-cancel-edit-form', 'click', cancelEdit);
 
         // Unit Picker
         let unitTargetInput = null;
         const unitGrid = document.getElementById('unit-grid');
         function initUnitGrid() {
+            if(!unitGrid) return;
             unitGrid.innerHTML = '';
             UNIT_LIST.forEach(u => {
                 const btn = document.createElement('button');
@@ -1134,15 +1160,22 @@ document.getElementById('manage-family-select').focus();
             });
         }
         window.openUnitPicker = (inputId) => {
-            playSound('click'); unitTargetInput = document.getElementById(inputId); initUnitGrid(); 
-            document.getElementById('modal-unit').classList.remove('hidden'); document.getElementById('unit-title').focus();
+            playSound('click'); 
+            unitTargetInput = document.getElementById(inputId); 
+            if(unitGrid) initUnitGrid(); 
+            const m = document.getElementById('modal-unit');
+            if(m) { m.classList.remove('hidden'); document.getElementById('unit-title').focus(); }
         };
-        window.closeUnitModal = () => { document.getElementById('modal-unit').classList.add('hidden'); if(unitTargetInput) unitTargetInput.focus(); };
-        document.getElementById('btn-pick-unit-add').addEventListener('click', () => openUnitPicker('add-unit'));
-        document.getElementById('btn-pick-unit-edit').addEventListener('click', () => openUnitPicker('edit-unit'));
+        window.closeUnitModal = () => { 
+            const m = document.getElementById('modal-unit');
+            if(m) m.classList.add('hidden'); 
+            if(unitTargetInput) unitTargetInput.focus(); 
+        };
+        safeListen('btn-pick-unit-add', 'click', () => openUnitPicker('add-unit'));
+        safeListen('btn-pick-unit-edit', 'click', () => openUnitPicker('edit-unit'));
 
         // Edit Execution
-        document.getElementById('form-edit').addEventListener('submit', async (e) => {
+        safeListen('form-edit', 'submit', async (e) => {
             e.preventDefault();
             const newQty = parseInt(document.getElementById('edit-quantity').value);
             const unitVal = document.getElementById('edit-unit').value;
@@ -1189,7 +1222,8 @@ document.getElementById('manage-family-select').focus();
             modal.classList.remove('hidden');
             setTimeout(() => { const v = modal.querySelectorAll('button:not(.hidden)'); if(v.length > 0) v[0].focus(); }, 100);
         }
-        document.getElementById('action-buttons-container').addEventListener('click', (e) => {
+        
+        safeListen('action-buttons-container', 'click', (e) => {
             const btn = e.target.closest('button'); if (!btn) return;
             const act = btn.dataset.action;
             if (act === 'put') openQtyPicker("放入数量", (n) => handleUpdate(n));
@@ -1205,7 +1239,6 @@ document.getElementById('manage-family-select').focus();
             const catSelect = document.getElementById('edit-category');
             catSelect.value = item.category || '其他杂项';
             if(catSelect.value === '') catSelect.value = '其他杂项';
-
             document.getElementById('edit-room').value = item.room;
             document.getElementById('edit-location').value = item.location;
             document.getElementById('edit-unit').value = item.unit || '个';
@@ -1214,60 +1247,66 @@ document.getElementById('manage-family-select').focus();
             renderTags('edit-tags-container', 'edit-tags-input');
         }
 
-        // Qty Picker (Fixed Focus Logic)
+        // Qty Picker
         let qtyCallback = null;
         const qtyGrid = document.getElementById('qty-grid');
-        qtyGrid.innerHTML = '';
-        for(let i=1; i<=10; i++) {
-            const btn = document.createElement('button'); btn.className = 'grid-btn'; btn.textContent = i;
-            const handler = (e) => { if(e.type === 'keydown' && e.key !== 'Enter') return; e.preventDefault(); e.stopPropagation(); submitQty(i); };
-            btn.addEventListener('click', handler); btn.addEventListener('keydown', handler); qtyGrid.appendChild(btn);
+        if(qtyGrid) {
+            qtyGrid.innerHTML = '';
+            for(let i=1; i<=10; i++) {
+                const btn = document.createElement('button'); btn.className = 'grid-btn'; btn.textContent = i;
+                const handler = (e) => { if(e.type === 'keydown' && e.key !== 'Enter') return; e.preventDefault(); e.stopPropagation(); submitQty(i); };
+                btn.addEventListener('click', handler); btn.addEventListener('keydown', handler); qtyGrid.appendChild(btn);
+            }
         }
+
         function openQtyPicker(title, cb) {
             playSound('click'); qtyCallback = cb;
             document.getElementById('qty-title').textContent = title;
             document.getElementById('modal-action').classList.add('hidden'); document.getElementById('modal-qty').classList.remove('hidden');
             const input = document.getElementById('qty-custom-input'); const confirm = document.getElementById('btn-qty-confirm'); const trigger = document.getElementById('qty-custom-trigger');
             input.value = ''; input.disabled = true; confirm.disabled = true; confirm.classList.add('opacity-50'); confirm.setAttribute('tabindex', '-1'); trigger.setAttribute('tabindex', '0');
-            setTimeout(() => { qtyGrid.firstChild.focus(); announce("请选择数量"); }, 100);
+            setTimeout(() => { if(qtyGrid && qtyGrid.firstChild) qtyGrid.firstChild.focus(); announce("请选择数量"); }, 100);
         }
+        
         const customTrigger = document.getElementById('qty-custom-trigger');
         function activateInput() {
             const input = document.getElementById('qty-custom-input'); const confirm = document.getElementById('btn-qty-confirm'); const trigger = document.getElementById('qty-custom-trigger');
             trigger.setAttribute('tabindex', '-1'); input.disabled = false; input.focus(); confirm.disabled = false; confirm.classList.remove('opacity-50'); confirm.setAttribute('tabindex', '0'); announce("请输入数字");
         }
-        customTrigger.addEventListener('click', activateInput);
-        customTrigger.addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.keyCode === 13) { e.preventDefault(); e.stopPropagation(); activateInput(); } });
-        document.getElementById('qty-custom-input').addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.keyCode === 13) { e.preventDefault(); e.stopPropagation(); submitQty(parseInt(e.target.value)); } });
-        document.getElementById('btn-qty-confirm').addEventListener('click', () => { submitQty(parseInt(document.getElementById('qty-custom-input').value)); });
+        if(customTrigger) {
+            customTrigger.addEventListener('click', activateInput);
+            customTrigger.addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.keyCode === 13) { e.preventDefault(); e.stopPropagation(); activateInput(); } });
+        }
+        safeListen('qty-custom-input', 'keydown', (e) => { if(e.key === 'Enter' || e.keyCode === 13) { e.preventDefault(); e.stopPropagation(); submitQty(parseInt(e.target.value)); } });
+        safeListen('btn-qty-confirm', 'click', () => { submitQty(parseInt(document.getElementById('qty-custom-input').value)); });
         
         function submitQty(val) { 
             if (!val || val <= 0) { announce("无效数量"); return; } 
             if (qtyCallback) qtyCallback(val); 
             document.getElementById('modal-qty').classList.add('hidden');
-            
-            // 修复焦点 BUG 2: 在新增界面，焦点归还给触发器，而不是走通用的 closeModals
             if (currentScreen === 'add') {
-                document.getElementById('btn-add-qty-trigger').focus();
+                const trigger = document.getElementById('btn-add-qty-trigger');
+                if(trigger) trigger.focus();
             } else {
                 closeModals();
             }
         }
         
-        function closeQtyModal() { 
+        window.closeQtyModal = () => { 
             document.getElementById('modal-qty').classList.add('hidden'); 
-            // 修复焦点 BUG 2: 取消时同样处理
             if (currentScreen === 'add') {
-                document.getElementById('btn-add-qty-trigger').focus();
+                const trigger = document.getElementById('btn-add-qty-trigger');
+                if(trigger) trigger.focus();
             } else {
                 closeModals(); 
             }
-        }
+        };
 
         window.closeModals = () => {
             document.querySelectorAll('[id^="modal-"]').forEach(m => m.classList.add('hidden'));
             const containerId = (currentScreen === 'results') ? 'results-list' : (currentScreen === 'takeout' ? 'takeout-list' : 'home-list');
             const container = document.getElementById(containerId);
+            if(!container) return;
             if (currentActionItem && currentActionItem.id) {
                 const target = container.querySelector(`.item-card[data-id="${currentActionItem.id}"]`);
                 if (target) { target.focus(); return; }
@@ -1296,54 +1335,28 @@ document.getElementById('manage-family-select').focus();
             document.getElementById('btn-zero-del').onclick = async () => { m.classList.add('hidden'); await execDelete(); };
             document.getElementById('btn-zero-cancel').onclick = () => { m.classList.add('hidden'); announce("已取消"); closeModals(); };
         }
+        
         let confirmCallback = null;
         function openGenericConfirm(msg, cb) {
-            document.getElementById('modal-action').classList.add('hidden'); const m = document.getElementById('modal-confirm'); playSound('error');
-            m.classList.remove('hidden'); document.getElementById('confirm-text').textContent = msg; confirmCallback = cb; setTimeout(() => document.getElementById('title-confirm').focus(), 100);
+            document.getElementById('modal-action').classList.add('hidden'); 
+            const m = document.getElementById('modal-confirm'); 
+            playSound('error');
+            m.classList.remove('hidden'); 
+            document.getElementById('confirm-text').textContent = msg; 
+            confirmCallback = cb; 
+            setTimeout(() => document.getElementById('title-confirm').focus(), 100);
         }
-        document.getElementById('btn-confirm-ok').addEventListener('click', () => { if(confirmCallback) confirmCallback(); document.getElementById('modal-confirm').classList.add('hidden'); });
-        document.getElementById('btn-confirm-cancel').addEventListener('click', () => closeModals());
+        
+        safeListen('btn-confirm-ok', 'click', () => { 
+            if(confirmCallback) confirmCallback(); 
+            const m = document.getElementById('modal-confirm');
+            if(m) m.classList.add('hidden'); 
+        });
+        
+        // 修复：确保 closeModals 全局可用后再绑定
+        safeListen('btn-confirm-cancel', 'click', () => { if(window.closeModals) window.closeModals(); });
+        
         async function execDelete() { try { await deleteDoc(doc(db, "items", currentActionItem.id)); announce("已删除"); closeModals(); } catch(e) { announce("删除失败"); } }
-
-        // Export/Import
-        document.getElementById('btn-export').addEventListener('click', () => {
-            let csvContent = "\uFEFF物品名称,分类,标签,房间,具体位置,数量,单位\n"; 
-            allItems.forEach(item => { 
-                const tagsStr = (item.tags || []).join(';');
-                csvContent += `${item.name},${item.category},${tagsStr},${item.room},${item.location || ''},${item.quantity},${item.unit||'个'}\n`; 
-            });
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `物品备份_${new Date().toISOString().slice(0,10)}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); announce("导出成功");
-        });
-        document.getElementById('btn-download-template').addEventListener('click', () => {
-            const csvContent = "\uFEFF物品名称(必填),分类,标签(用分号隔开),房间(必填),具体位置,数量(数字),单位\n大米,食品饮料,粮食;主食,厨房,米桶,1,袋\n洗发水,个人护理,洗护;日常,卫生间,架子,1,瓶"; 
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `导入模板.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); announce("模板下载成功");
-        });
-        document.getElementById('btn-trigger-upload').addEventListener('click', () => document.getElementById('file-upload').click());
-        document.getElementById('file-upload').addEventListener('change', (e) => {
-            const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
-            reader.onload = async (e) => {
-                const text = e.target.result; const rows = text.split('\n'); let count = 0;
-                for (let i = 1; i < rows.length; i++) {
-                    const row = rows[i].trim(); if (!row) continue; const cols = row.split(','); if (cols.length < 1) continue; const name = cols[0]?.trim(); if(!name) continue;
-                    
-                    const cat = cols[1]?.trim() || '其他杂项';
-                    const tagStr = cols[2]?.trim() || '';
-                    const tags = tagStr ? tagStr.split(';').map(t => t.trim()).filter(t=>t) : [];
-
-                    await addDoc(itemsRef, { 
-                        name: name, 
-                        category: cat,
-                        tags: tags,
-                        room: cols[3]?.trim() || '客厅', 
-                        location: cols[4]?.trim() || '', 
-                        quantity: parseInt(cols[5]) || 1, 
-                        unit: cols[6]?.trim() || '个', 
-                        uid: auth.currentUser.uid, 
-                        updatedAt: serverTimestamp() 
-                    }); count++;
-                } announce(`导入 ${count} 个物品`); switchScreen('screen-home');
-            }; reader.readAsText(file);
-        });
 
         // Global Keydown
         window.addEventListener('keydown', (e) => {
