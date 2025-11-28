@@ -629,40 +629,18 @@ const tabIds = ['tab-profile', 'tab-family', 'tab-rooms'];
 
 let unsubscribeProfile = null;
 
-function loadUserProfile(user) {
+        function loadUserProfile(user) {
             if (unsubscribeProfile) unsubscribeProfile();
             unsubscribeProfile = onSnapshot(doc(db, "profiles", user.uid), (docSnap) => {
-                let nick = user.email;
-                let identity = '其他';
-                
                 if (docSnap.exists()) {
                     const data = docSnap.data();
-                    nick = data.nickname || user.email;
-                    identity = data.identity || '其他';
+                    userProfile.nickname = data.nickname || user.email;
+                    userProfile.identity = data.identity || '其他';
+                } else {
+                    userProfile.nickname = user.email;
+                    userProfile.identity = '其他';
                 }
-                
-                userProfile.nickname = nick;
-                userProfile.identity = identity;
-                
-                // 核心修复：强制更新主页顶部按钮
-                const btnAccount = document.getElementById('btn-account-menu');
-                const displaySpan = document.getElementById('user-email-display');
-                
-                if (btnAccount && displaySpan) {
-                    // 1. 更新视觉文字
-                    displaySpan.textContent = nick;
-                    // 2. 更新读屏内容（严格按照你的格式）
-                    const label = `当前账号：${nick}，${user.email}，点击展开菜单`;
-                    btnAccount.setAttribute('aria-label', label);
-                }
-
-                // 如果当前在设置页，同步更新输入框回显
-                if (currentScreen === 'settings') {
-                    const inputNick = document.getElementById('set-nickname');
-                    if (inputNick && document.activeElement !== inputNick) {
-                        inputNick.value = nick;
-                    }
-                }
+                if (currentScreen === 'settings') renderProfileUI();
             });
         }
 
@@ -950,24 +928,16 @@ document.getElementById('manage-family-select').focus();
         });
 
         // 按钮：进入“新增房间”界面
-safeListen('btn-to-room-add', 'click', () => {
+        safeListen('btn-to-room-add', 'click', () => {
             if(!currentFamilyId) { announce("请先选择一个家庭"); return; }
-            
-            // 1. 每次进入前，强制清空之前的勾选状态
-            pendingSelectedDefaults.clear();
-            
-            // 2. 切换屏幕
             switchScreen('screen-room-add');
-            
-            // 3. 重新渲染列表（此时已是清空状态）
             renderPresetKeyboardList();
-            
-            // 4. 重置自定义输入框
             const input = document.getElementById('input-custom-room');
             if(input) input.value = '';
-            
-            announce("进入新增房间界面，请勾选需要添加的房间，支持多选");
+            announce("进入新增房间界面");
         });
+
+        // 按钮：进入“删除房间”界面
         safeListen('btn-to-room-del', 'click', () => {
             if(!currentFamilyId) { announce("请先选择一个家庭"); return; }
             switchScreen('screen-room-del');
@@ -1023,145 +993,65 @@ function renderDeleteRoomList() {
         }
 
         // 渲染预设房间列表
-function renderPresetKeyboardList() {
+        function renderPresetKeyboardList() {
             const container = document.getElementById('preset-room-list');
             if(!container) return;
             container.innerHTML = '';
-            
-            SYSTEM_ROOMS.forEach((room, index) => {
-                const isOwned = currentFamilyRooms.includes(room);
-                
+            pendingSelectedDefaults.clear(); 
+            const availableDefaults = SYSTEM_ROOMS.filter(r => !currentFamilyRooms.includes(r));
+            if (availableDefaults.length === 0) {
+                container.innerHTML = '<div class="p-4 text-gray-500 font-bold" tabindex="0">常用房间都已添加完毕。</div>';
+                return;
+            }
+            availableDefaults.forEach((room, index) => {
                 const div = document.createElement('div');
-                div.className = "preset-item flex items-center gap-3 p-4 rounded-lg border-2 mb-3 transition-colors";
-                div.dataset.room = room; 
-
-                if (isOwned) {
-                    // === 情况A：已拥有 (不可操作) ===
-                    div.className += " bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed";
-                    
-                    // 读屏：明确告知不可选
-                    div.setAttribute('aria-label', `${room}，已拥有，不可选择`);
-                    div.setAttribute('role', 'text');
-                    div.setAttribute('tabindex', '0'); 
-                    
-                    div.innerHTML = `
-                        <div class="w-6 h-6 border-2 border-gray-300 rounded flex items-center justify-center bg-gray-200 mr-2" aria-hidden="true">
-                             <span class="text-gray-500 font-bold text-sm">×</span>
-                        </div>
-                        <span class="text-xl font-bold">${room} (已存在)</span>
-                    `;
-                    
-                    // 交互阻断：播放错误音效
-                    const reject = (e) => { 
-                        e.preventDefault(); 
-                        playSound('error'); 
-                        announce(`${room} 已经存在了`); 
-                    };
-                    div.addEventListener('click', reject);
-                    div.addEventListener('keydown', (e) => { 
-                        if(e.key === ' ' || e.key === 'Enter') reject(e);
-                    });
-
-                } else {
-                    // === 情况B：未拥有 (可勾选) ===
-                    const isChecked = pendingSelectedDefaults.has(room);
-                    
-                    if (isChecked) {
-                        div.className += " bg-blue-50 border-blue-600";
-                        div.setAttribute('aria-checked', 'true');
-                    } else {
-                        div.className += " bg-white border-gray-300";
-                        div.setAttribute('aria-checked', 'false');
-                    }
-                    
-                    div.setAttribute('role', 'checkbox');
-                    div.setAttribute('tabindex', '0');
-                    
-                    // 读屏：清晰播报当前状态
-                    const label = isChecked ? `${room}，已选中` : `${room}，未选中`;
-                    div.setAttribute('aria-label', label);
-
-                    const checkMark = isChecked ? '<span class="text-white text-sm font-bold">✓</span>' : '';
-                    const boxClass = isChecked ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-400';
-                    
-                    div.innerHTML = `
-                        <div class="chk-icon w-6 h-6 border-2 rounded flex items-center justify-center mr-2 ${boxClass}" aria-hidden="true">
-                             ${checkMark}
-                        </div>
-                        <span class="text-xl font-bold text-gray-800">${room}</span>
-                    `;
-
-                    // 绑定正常的切换事件
-                    const toggleHandler = (e) => { 
-                        e.preventDefault(); 
-                        togglePresetSelection(div, room); 
-                    };
-                    div.addEventListener('click', toggleHandler);
-                    div.addEventListener('keydown', (e) => {
-                        if (e.key === ' ' || e.key === 'Enter') toggleHandler(e);
-                    });
-                }
-                
-                // 统一绑定上下键导航
-                 div.addEventListener('keydown', (e) => {
-                    if (e.key === 'ArrowDown') { e.preventDefault(); moveFocus(div, 'next'); }
+                div.className = "flex items-center gap-3 p-3 rounded-lg cursor-pointer border-2 border-transparent mb-2 bg-white";
+                div.setAttribute('role', 'checkbox');
+                div.setAttribute('aria-checked', 'false'); 
+                div.setAttribute('tabindex', index === 0 ? '0' : '-1'); 
+                div.dataset.room = room;
+                const chk = document.createElement('div');
+                chk.className = "w-6 h-6 border-2 border-gray-400 rounded flex items-center justify-center chk-box mr-2";
+                const text = document.createElement('span');
+                text.className = "text-xl font-bold";
+                text.textContent = room;
+                div.appendChild(chk);
+                div.appendChild(text);
+                const toggle = (e) => { e.preventDefault(); togglePresetSelection(div, chk); };
+                div.addEventListener('click', toggle);
+                div.addEventListener('keydown', (e) => {
+                    if (e.key === ' ' || e.key === 'Enter') toggle(e);
+                    else if (e.key === 'ArrowDown') { e.preventDefault(); moveFocus(div, 'next'); }
                     else if (e.key === 'ArrowUp') { e.preventDefault(); moveFocus(div, 'prev'); }
                 });
-
                 container.appendChild(div);
             });
         }
 
-function togglePresetSelection(el, room) {
-            const icon = el.querySelector('.chk-icon');
-            
+        function togglePresetSelection(el, chkIcon) {
+            const room = el.dataset.room;
             if (pendingSelectedDefaults.has(room)) {
-                // === 动作：取消选中 ===
                 pendingSelectedDefaults.delete(room);
-                
-                // 1. 还原视觉样式
-                el.classList.remove('bg-blue-50', 'border-blue-600');
-                el.classList.add('bg-white', 'border-gray-300');
-                
-                // 2. 还原图标
-                if(icon) {
-                    icon.innerHTML = '';
-                    icon.classList.remove('bg-blue-600', 'border-blue-600');
-                    icon.classList.add('bg-white', 'border-gray-400');
-                }
-                
-                // 3. 读屏反馈
                 el.setAttribute('aria-checked', 'false');
-                el.setAttribute('aria-label', `${room}，未选中`); 
+                el.classList.remove('bg-blue-50', 'border-blue-300');
+                chkIcon.innerHTML = '';
+                chkIcon.classList.remove('bg-blue-600', 'border-blue-600');
+                chkIcon.classList.add('border-gray-400');
                 announce(`已取消 ${room}`);
-                
             } else {
-                // === 动作：执行选中 ===
                 pendingSelectedDefaults.add(room);
-                
-                // 1. 设置高亮样式
-                el.classList.remove('bg-white', 'border-gray-300');
-                el.classList.add('bg-blue-50', 'border-blue-600');
-                
-                // 2. 设置打勾图标
-                if(icon) {
-                    icon.innerHTML = '<span class="text-white text-sm font-bold">✓</span>';
-                    icon.classList.remove('bg-white', 'border-gray-400');
-                    icon.classList.add('bg-blue-600', 'border-blue-600');
-                }
-                
-                // 3. 读屏反馈
                 el.setAttribute('aria-checked', 'true');
-                el.setAttribute('aria-label', `${room}，已选中`); 
+                el.classList.add('bg-blue-50', 'border-blue-300');
+                chkIcon.innerHTML = '<span class="text-white text-sm font-bold">✓</span>';
+                chkIcon.classList.remove('border-gray-400');
+                chkIcon.classList.add('bg-blue-600', 'border-blue-600');
                 announce(`已选中 ${room}`);
-                playSound('click');
             }
         }
 
 function moveFocus(currentEl, dir) {
             const parent = currentEl.parentElement;
-            // 修改点：不再找 role=checkbox，而是找所有带 preset-item 类的元素
-            const items = Array.from(parent.querySelectorAll('.preset-item'));
+            const items = Array.from(parent.children).filter(el => el.getAttribute('role') === 'checkbox');
             if (items.length === 0) return;
 
             const currentIndex = items.indexOf(currentEl);
