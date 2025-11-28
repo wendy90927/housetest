@@ -613,6 +613,26 @@ const tabIds = ['tab-profile', 'tab-family', 'tab-rooms'];
             });
         });
 
+function renderProfileUI() {
+            document.getElementById('set-nickname').value = userProfile.nickname;
+            
+            // 身份回显逻辑
+            const select = document.getElementById('set-identity-select');
+            const customBox = document.getElementById('box-identity-custom');
+            const customInput = document.getElementById('set-identity-custom');
+            const standardOptions = ['爸爸', '妈妈', '儿子', '女儿', '老人'];
+
+            if (standardOptions.includes(userProfile.identity)) {
+                select.value = userProfile.identity;
+                customBox.classList.add('hidden');
+                customInput.value = '';
+            } else {
+                select.value = '自定义';
+                customBox.classList.remove('hidden');
+                customInput.value = userProfile.identity;
+            }
+        }
+
 // 监听身份下拉框变化
         document.getElementById('set-identity-select').addEventListener('change', (e) => {
             const box = document.getElementById('box-identity-custom');
@@ -683,9 +703,6 @@ const tabIds = ['tab-profile', 'tab-family', 'tab-rooms'];
                 }
             }
 
-            const newPass = document.getElementById('set-new-pass').value;
-            const confirmPass = document.getElementById('set-confirm-pass').value;
-            
             try {
                 await setDoc(doc(db, "profiles", auth.currentUser.uid), {
                     nickname: nick || auth.currentUser.email,
