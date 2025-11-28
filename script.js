@@ -38,7 +38,7 @@ const familiesRef = collection(db, "families");
         let userFamilies = []; 
         let currentFamilyId = null;
 let isEditingFamily = false;
-        const SYSTEM_ROOMS = ["客厅", "厨房", "卧室", "书房", "餐厅", "玄关", "卫生间", "洗衣房", "阳台"];
+const SYSTEM_ROOMS = ["客厅", "厨房", "卧室", "书房", "餐厅", "玄关", "卫生间", "洗衣房", "阳台", "次卧", "阁楼", "地下室", "车库", "仓库"];
 let currentFamilyRooms = []; // 当前家庭已拥有的房间
         let pendingSelectedDefaults = new Set(); // 用户正在勾选的预设房间
         
@@ -868,9 +868,10 @@ function renderProfileUI() {
                     });
                     announce("家庭信息已更新");
                 } else {
-                    const docRef = await addDoc(familiesRef, {
+const docRef = await addDoc(familiesRef, {
                         name: name,
                         location: loc,
+                        rooms: ["客厅", "厨房", "卧室", "卫生间"],
                         uid: auth.currentUser.uid,
                         createdAt: serverTimestamp()
                     });
@@ -945,7 +946,7 @@ document.getElementById('manage-family-select').focus();
         });
 
         // 逻辑：渲染删除列表
-        function renderDeleteRoomList() {
+function renderDeleteRoomList() {
             const container = document.getElementById('list-delete-rooms');
             if(!container) return;
             container.innerHTML = '';
@@ -959,14 +960,31 @@ document.getElementById('manage-family-select').focus();
                 btn.textContent = `删除 ${room}`;
                 btn.onclick = () => {
                     openGenericConfirm(`确定要永久删除“${room}”吗？`, async () => {
-                        currentFamilyRooms = currentFamilyRooms.filter(r => r !== room);
-                        await saveRoomsToFirestore();
-                        renderDeleteRoomList();
-                        const firstBtn = container.querySelector('button');
-                        if(firstBtn) firstBtn.focus();
-                        else {
-                            const backBtn = document.getElementById('btn-back-from-del-room');
-                            if(backBtn) backBtn.focus();
+                        // 1. 先获取最新数据，防止状态不同步
+                        const snap = await getDoc(doc(db, "families", currentFamilyId));
+                        if (snap.exists()) {
+                             let latestRooms = snap.data().rooms || [];
+                             // 2. 过滤掉要删除的房间
+                             latestRooms = latestRooms.filter(r => r !== room);
+                             // 3. 更新全局变量和数据库
+                             currentFamilyRooms = latestRooms;
+                             await updateDoc(doc(db, "families", currentFamilyId), {
+                                 rooms: latestRooms,
+                                 updatedAt: serverTimestamp()
+                             });
+                             // 4. 重新渲染列表
+                             renderDeleteRoomList();
+                             announce(`已删除 ${room}`);
+                             
+                             // 5. 焦点管理：尝试聚焦第一个按钮或返回键
+                             setTimeout(() => {
+                                 const firstBtn = container.querySelector('button');
+                                 if(firstBtn) firstBtn.focus();
+                                 else {
+                                     const backBtn = document.getElementById('btn-back-from-del-room');
+                                     if(backBtn) backBtn.focus();
+                                 }
+                             }, 100);
                         }
                     });
                 };
