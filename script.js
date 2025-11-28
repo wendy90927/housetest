@@ -629,7 +629,7 @@ const tabIds = ['tab-profile', 'tab-family', 'tab-rooms'];
 
 let unsubscribeProfile = null;
 
-        function loadUserProfile(user) {
+function loadUserProfile(user) {
             if (unsubscribeProfile) unsubscribeProfile();
             unsubscribeProfile = onSnapshot(doc(db, "profiles", user.uid), (docSnap) => {
                 if (docSnap.exists()) {
@@ -640,6 +640,17 @@ let unsubscribeProfile = null;
                     userProfile.nickname = user.email;
                     userProfile.identity = '其他';
                 }
+                
+                // 核心修复：这里直接操作 DOM，确保主页顶部按钮实时更新
+                const btnAccount = document.getElementById('btn-account-menu');
+                if (btnAccount) {
+                    const displayTest = document.getElementById('user-email-display');
+                    if(displayTest) displayTest.textContent = userProfile.nickname;
+                    
+                    const ariaLabel = `当前账号：${userProfile.nickname}，${user.email}，点击展开菜单`;
+                    btnAccount.setAttribute('aria-label', ariaLabel);
+                }
+
                 if (currentScreen === 'settings') renderProfileUI();
             });
         }
@@ -993,37 +1004,55 @@ function renderDeleteRoomList() {
         }
 
         // 渲染预设房间列表
-        function renderPresetKeyboardList() {
+function renderPresetKeyboardList() {
             const container = document.getElementById('preset-room-list');
             if(!container) return;
             container.innerHTML = '';
             pendingSelectedDefaults.clear(); 
-            const availableDefaults = SYSTEM_ROOMS.filter(r => !currentFamilyRooms.includes(r));
-            if (availableDefaults.length === 0) {
-                container.innerHTML = '<div class="p-4 text-gray-500 font-bold" tabindex="0">常用房间都已添加完毕。</div>';
-                return;
-            }
-            availableDefaults.forEach((room, index) => {
+            
+            // 遍历所有系统预设房间
+            SYSTEM_ROOMS.forEach((room, index) => {
+                const isOwned = currentFamilyRooms.includes(room);
+                
+                // 创建容器：统一添加 preset-item 类名，方便焦点移动函数识别
                 const div = document.createElement('div');
-                div.className = "flex items-center gap-3 p-3 rounded-lg cursor-pointer border-2 border-transparent mb-2 bg-white";
-                div.setAttribute('role', 'checkbox');
-                div.setAttribute('aria-checked', 'false'); 
-                div.setAttribute('tabindex', index === 0 ? '0' : '-1'); 
-                div.dataset.room = room;
-                const chk = document.createElement('div');
-                chk.className = "w-6 h-6 border-2 border-gray-400 rounded flex items-center justify-center chk-box mr-2";
-                const text = document.createElement('span');
-                text.className = "text-xl font-bold";
-                text.textContent = room;
-                div.appendChild(chk);
-                div.appendChild(text);
-                const toggle = (e) => { e.preventDefault(); togglePresetSelection(div, chk); };
-                div.addEventListener('click', toggle);
+                div.className = "preset-item flex items-center gap-3 p-3 rounded-lg border-2 mb-2 transition-colors";
+                
+                if (isOwned) {
+                    // 情况A：已拥有 -> 样式置灰，没有 role="checkbox"，纯文本朗读
+                    div.className += " border-gray-100 bg-gray-100 text-gray-400 cursor-default";
+                    div.setAttribute('aria-label', `${room} (已添加)`); 
+                    div.innerHTML = `<span class="font-bold text-xl ml-8">${room}</span>`; 
+                } else {
+                    // 情况B：未拥有 -> 正常复选框样式，可点击，可空格
+                    div.className += " cursor-pointer bg-white border-transparent";
+                    div.setAttribute('role', 'checkbox');
+                    div.setAttribute('aria-checked', 'false');
+                    
+                    const chk = document.createElement('div');
+                    chk.className = "w-6 h-6 border-2 border-gray-400 rounded flex items-center justify-center chk-box mr-2";
+                    const text = document.createElement('span');
+                    text.className = "text-xl font-bold";
+                    text.textContent = room;
+                    
+                    div.appendChild(chk);
+                    div.appendChild(text);
+
+                    // 绑定选中事件
+                    const toggle = (e) => { e.preventDefault(); togglePresetSelection(div, chk); };
+                    div.addEventListener('click', toggle);
+                    div.addEventListener('keydown', (e) => {
+                        if (e.key === ' ' || e.key === 'Enter') toggle(e);
+                    });
+                }
+
+                // 统一绑定焦点事件
+                div.setAttribute('tabindex', index === 0 ? '0' : '-1');
                 div.addEventListener('keydown', (e) => {
-                    if (e.key === ' ' || e.key === 'Enter') toggle(e);
-                    else if (e.key === 'ArrowDown') { e.preventDefault(); moveFocus(div, 'next'); }
+                    if (e.key === 'ArrowDown') { e.preventDefault(); moveFocus(div, 'next'); }
                     else if (e.key === 'ArrowUp') { e.preventDefault(); moveFocus(div, 'prev'); }
                 });
+
                 container.appendChild(div);
             });
         }
@@ -1051,7 +1080,8 @@ function renderDeleteRoomList() {
 
 function moveFocus(currentEl, dir) {
             const parent = currentEl.parentElement;
-            const items = Array.from(parent.children).filter(el => el.getAttribute('role') === 'checkbox');
+            // 修改点：不再找 role=checkbox，而是找所有带 preset-item 类的元素
+            const items = Array.from(parent.querySelectorAll('.preset-item'));
             if (items.length === 0) return;
 
             const currentIndex = items.indexOf(currentEl);
