@@ -698,6 +698,7 @@ const tabIds = ['tab-profile', 'tab-family', 'tab-rooms'];
                 announce("资料保存失败");
                 return;
             }
+});
 
         // 监听取消按钮
         document.getElementById('btn-profile-cancel').addEventListener('click', () => {
