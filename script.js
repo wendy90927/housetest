@@ -548,99 +548,33 @@ loadUserFamilies(user);
 
         document.getElementById('btn-back-settings').addEventListener('click', () => switchScreen('screen-home'));
 
-        function switchSettingsTab(tabId) {
-            // 隐藏所有面板，重置按钮样式
+function switchSettingsTab(tabId) {
             ['profile', 'family', 'rooms'].forEach(k => {
-                document.getElementById(`panel-${k}`).classList.add('hidden');
-                const btn = document.getElementById(`tab-${k}`);
+                const pid = `panel-${k}`;
+                const bid = `tab-${k}`;
+                document.getElementById(pid).classList.add('hidden');
+                const btn = document.getElementById(bid);
                 btn.setAttribute('aria-selected', 'false');
+                btn.setAttribute('tabindex', '-1'); 
                 btn.classList.remove('border-b-4', 'border-blue-800', 'text-blue-800');
                 btn.classList.add('text-gray-600');
             });
             
-            // 显示选中面板，高亮按钮
             const key = tabId.replace('tab-', '');
             document.getElementById(`panel-${key}`).classList.remove('hidden');
             const activeBtn = document.getElementById(tabId);
             activeBtn.setAttribute('aria-selected', 'true');
+            activeBtn.setAttribute('tabindex', '0'); 
             activeBtn.classList.add('border-b-4', 'border-blue-800', 'text-blue-800');
             activeBtn.classList.remove('text-gray-600');
-            
-            // 焦点管理：切换后读出当前标签名
-            announce(`已切换到 ${activeBtn.innerText}`);
         }
 
-const tabIds = ['tab-profile', 'tab-family', 'tab-rooms'];
-        tabIds.forEach((id, index) => {
-            const el = document.getElementById(id);
-            el.addEventListener('click', () => switchSettingsTab(id));
-            el.addEventListener('keydown', (e) => {
-                let newIndex = -1;
-                if (e.key === 'ArrowRight') {
-                    newIndex = (index + 1) % tabIds.length;
-                } else if (e.key === 'ArrowLeft') {
-                    newIndex = (index - 1 + tabIds.length) % tabIds.length;
-                }
-                
-                if (newIndex !== -1) {
-                    e.preventDefault();
-                    const targetId = tabIds[newIndex];
-                    document.getElementById(targetId).focus(); // 移动焦点
-                    document.getElementById(targetId).click(); // 触发切换
-                }
-            });
-        });
-
-// --- Profile Logic ---
-        let unsubscribeProfile = null;
-
-        function loadUserProfile(user) {
-            if (unsubscribeProfile) unsubscribeProfile();
-            unsubscribeProfile = onSnapshot(doc(db, "profiles", user.uid), (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    userProfile.nickname = data.nickname || user.email;
-                    userProfile.identity = data.identity || '其他';
-                } else {
-                    userProfile.nickname = user.email;
-                    userProfile.identity = '其他';
-                }
-                if (currentScreen === 'settings') renderProfileUI();
-            });
-        }
-
-function renderProfileUI() {
-            document.getElementById('set-nickname').value = userProfile.nickname;
-            
-            // 身份回显逻辑
-            const select = document.getElementById('set-identity-select');
-            const customBox = document.getElementById('box-identity-custom');
-            const customInput = document.getElementById('set-identity-custom');
-            const standardOptions = ['爸爸', '妈妈', '儿子', '女儿', '老人'];
-
-            if (standardOptions.includes(userProfile.identity)) {
-                select.value = userProfile.identity;
-                customBox.classList.add('hidden');
-                customInput.value = '';
-            } else {
-                select.value = '自定义';
-                customBox.classList.remove('hidden');
-                customInput.value = userProfile.identity;
-            }
-
-            // 重置密码修改区状态
-            document.getElementById('box-password-change').classList.add('hidden');
-            document.getElementById('set-new-pass').value = '';
-            document.getElementById('set-confirm-pass').value = '';
-        }
-
-        // 监听身份下拉框变化
+// 监听身份下拉框变化
         document.getElementById('set-identity-select').addEventListener('change', (e) => {
             const box = document.getElementById('box-identity-custom');
             if (e.target.value === '自定义') {
                 box.classList.remove('hidden');
                 document.getElementById('set-identity-custom').focus();
-                announce("请输入自定义身份");
             } else {
                 box.classList.add('hidden');
             }
@@ -649,13 +583,14 @@ function renderProfileUI() {
         // 监听修改密码按钮
         document.getElementById('btn-toggle-password').addEventListener('click', () => {
             const box = document.getElementById('box-password-change');
+            const btnText = document.querySelector('#btn-toggle-password span:last-child');
             if (box.classList.contains('hidden')) {
                 box.classList.remove('hidden');
                 document.getElementById('set-new-pass').focus();
-                announce("已展开密码修改框");
+                btnText.textContent = "点击收起";
             } else {
                 box.classList.add('hidden');
-                announce("已收起");
+                btnText.textContent = "点击展开";
             }
         });
 
