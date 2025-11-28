@@ -445,36 +445,67 @@
                 </div>
             </div>
 
-            <div id="panel-rooms" role="tabpanel" tabindex="0" aria-labelledby="tab-rooms" class="hidden">
+<div id="panel-rooms" role="tabpanel" tabindex="0" aria-labelledby="tab-rooms" class="hidden">
                 <div class="bg-white p-6 rounded-lg shadow space-y-6">
                     <div>
-                        <label for="room-family-select" class="block font-bold mb-2 text-lg">选择家庭</label>
-                        <select id="room-family-select" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg bg-white"></select>
+                        <label for="room-family-select" class="block font-bold mb-4 text-xl">请选择要管理的家庭</label>
+                        <select id="room-family-select" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl bg-white"></select>
                     </div>
                     
-                    <div class="border-t pt-4">
-                        <h3 class="font-bold text-lg mb-2">新增房间</h3>
-                        <p class="text-sm text-gray-600 mb-2">系统预设 (按上下键浏览，空格键选中):</p>
-                        <div id="preset-room-list" role="listbox" aria-multiselectable="true" class="h-40 overflow-y-auto border-2 border-gray-300 rounded-lg p-2 bg-gray-50 mb-4 focus:border-blue-500 focus:ring-2 ring-blue-200" tabindex="0" aria-label="预设房间列表，使用上下光标键移动，空格键切换选中状态">
-                            <div class="p-2 text-gray-500 italic">正在加载预设...</div> 
-                        </div>
+                    <hr class="border-gray-200">
 
-                        <label for="input-custom-room" class="block font-bold mb-2">自定义房间名称</label>
-                        <div class="flex gap-2">
-                            <input type="text" id="input-custom-room" class="flex-grow p-3 border-2 border-gray-300 rounded-lg" placeholder="输入名称">
-                            <button id="btn-add-custom-room" class="bg-blue-100 text-blue-900 px-4 rounded-lg font-bold border-2 border-blue-300">添加</button>
-                        </div>
-                    </div>
-
-                    <div class="border-t pt-4">
-                        <h3 class="font-bold text-lg mb-2">已管理房间 (点击删除)</h3>
-                        <div id="list-managed-rooms" class="grid grid-cols-2 gap-3" role="list">
-                            </div>
-                        <button id="btn-save-rooms" class="w-full bg-blue-600 text-white p-4 rounded-lg font-bold text-xl mt-6">保存房间设置</button>
+                    <div class="flex flex-col gap-4">
+                        <button id="btn-to-room-add" class="w-full py-6 bg-blue-50 text-blue-900 border-2 border-blue-300 rounded-xl font-bold text-2xl shadow-sm hover:bg-blue-100 flex items-center justify-center gap-2">
+                            <span>+ 新增房间</span>
+                        </button>
+                        
+                        <button id="btn-to-room-del" class="w-full py-6 bg-red-50 text-red-900 border-2 border-red-300 rounded-xl font-bold text-2xl shadow-sm hover:bg-red-100 flex items-center justify-center gap-2">
+                            <span>- 删除房间</span>
+                        </button>
                     </div>
                 </div>
             </div>
 
+        </div>
+    </div>
+
+<div id="screen-room-add" class="screen hidden min-h-screen flex flex-col bg-gray-50">
+        <div class="bg-blue-800 text-white p-4 shadow-md sticky top-0 z-20">
+            <h1 class="text-xl font-bold text-center outline-none" tabindex="-1">新增房间</h1>
+        </div>
+        <div class="max-w-3xl mx-auto w-full p-4 flex-grow overflow-y-auto">
+            <div class="bg-white p-6 rounded-lg shadow mb-6">
+                <h2 class="font-bold text-xl mb-4">方式一：从常用列表中选择</h2>
+                <p class="text-gray-600 mb-2">使用上下键浏览，空格键勾选 (支持多选)</p>
+                <div id="preset-room-list" role="listbox" aria-multiselectable="true" class="max-h-60 overflow-y-auto border-2 border-gray-300 rounded-lg p-2 bg-gray-50 focus:border-blue-500 focus:ring-2 ring-blue-200" tabindex="0" aria-label="预设房间列表">
+                    </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow mb-6">
+                <h2 class="font-bold text-xl mb-4">方式二：手动输入</h2>
+                <label for="input-custom-room" class="block font-bold mb-2 text-lg">房间名称</label>
+                <input type="text" id="input-custom-room" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" placeholder="例如：阁楼">
+            </div>
+
+            <div class="flex gap-4">
+                <button id="btn-confirm-add-rooms" class="flex-1 bg-blue-600 text-white p-4 rounded-lg font-bold text-xl shadow hover:bg-blue-700">保存并返回</button>
+                <button id="btn-back-from-add-room" class="flex-1 bg-gray-200 text-gray-800 p-4 rounded-lg font-bold text-xl hover:bg-gray-300">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="screen-room-del" class="screen hidden min-h-screen flex flex-col bg-gray-50">
+        <div class="bg-red-800 text-white p-4 shadow-md sticky top-0 z-20">
+            <h1 class="text-xl font-bold text-center outline-none" tabindex="-1">删除房间</h1>
+        </div>
+        <div class="max-w-3xl mx-auto w-full p-4 flex-grow overflow-y-auto">
+            <p class="font-bold text-lg mb-4 text-gray-700">点击下列按钮即可删除对应房间：</p>
+            <div id="list-delete-rooms" class="flex flex-col gap-3">
+                </div>
+            
+            <div class="mt-8">
+                <button id="btn-back-from-del-room" class="w-full bg-gray-200 text-gray-800 p-4 rounded-lg font-bold text-xl hover:bg-gray-300">返回上一页</button>
+            </div>
         </div>
     </div>
 
