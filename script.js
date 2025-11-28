@@ -632,26 +632,37 @@ let unsubscribeProfile = null;
 function loadUserProfile(user) {
             if (unsubscribeProfile) unsubscribeProfile();
             unsubscribeProfile = onSnapshot(doc(db, "profiles", user.uid), (docSnap) => {
+                let nick = user.email;
+                let identity = '其他';
+                
                 if (docSnap.exists()) {
                     const data = docSnap.data();
-                    userProfile.nickname = data.nickname || user.email;
-                    userProfile.identity = data.identity || '其他';
-                } else {
-                    userProfile.nickname = user.email;
-                    userProfile.identity = '其他';
+                    nick = data.nickname || user.email;
+                    identity = data.identity || '其他';
                 }
                 
-                // 核心修复：这里直接操作 DOM，确保主页顶部按钮实时更新
+                userProfile.nickname = nick;
+                userProfile.identity = identity;
+                
+                // 核心修复：强制更新主页顶部按钮
                 const btnAccount = document.getElementById('btn-account-menu');
-                if (btnAccount) {
-                    const displayTest = document.getElementById('user-email-display');
-                    if(displayTest) displayTest.textContent = userProfile.nickname;
-                    
-                    const ariaLabel = `当前账号：${userProfile.nickname}，${user.email}，点击展开菜单`;
-                    btnAccount.setAttribute('aria-label', ariaLabel);
+                const displaySpan = document.getElementById('user-email-display');
+                
+                if (btnAccount && displaySpan) {
+                    // 1. 更新视觉文字
+                    displaySpan.textContent = nick;
+                    // 2. 更新读屏内容（严格按照你的格式）
+                    const label = `当前账号：${nick}，${user.email}，点击展开菜单`;
+                    btnAccount.setAttribute('aria-label', label);
                 }
 
-                if (currentScreen === 'settings') renderProfileUI();
+                // 如果当前在设置页，同步更新输入框回显
+                if (currentScreen === 'settings') {
+                    const inputNick = document.getElementById('set-nickname');
+                    if (inputNick && document.activeElement !== inputNick) {
+                        inputNick.value = nick;
+                    }
+                }
             });
         }
 
@@ -1010,21 +1021,23 @@ function renderPresetKeyboardList() {
             container.innerHTML = '';
             pendingSelectedDefaults.clear(); 
             
-            // 遍历所有系统预设房间
             SYSTEM_ROOMS.forEach((room, index) => {
                 const isOwned = currentFamilyRooms.includes(room);
                 
-                // 创建容器：统一添加 preset-item 类名，方便焦点移动函数识别
                 const div = document.createElement('div');
+                // 保持 preset-item 类名供焦点导航使用
                 div.className = "preset-item flex items-center gap-3 p-3 rounded-lg border-2 mb-2 transition-colors";
                 
                 if (isOwned) {
-                    // 情况A：已拥有 -> 样式置灰，没有 role="checkbox"，纯文本朗读
+                    // 情况A：已拥有 -> 彻底移除交互性
                     div.className += " border-gray-100 bg-gray-100 text-gray-400 cursor-default";
-                    div.setAttribute('aria-label', `${room} (已添加)`); 
+                    // 核心修改：aria-label 只读房间名，不加任何后缀
+                    div.setAttribute('aria-label', room); 
+                    // 视觉上保留文字，不显示勾选框
                     div.innerHTML = `<span class="font-bold text-xl ml-8">${room}</span>`; 
+                    // 不添加 click/keydown 事件，所以空格键按了也没反应
                 } else {
-                    // 情况B：未拥有 -> 正常复选框样式，可点击，可空格
+                    // 情况B：未拥有 -> 正常复选框
                     div.className += " cursor-pointer bg-white border-transparent";
                     div.setAttribute('role', 'checkbox');
                     div.setAttribute('aria-checked', 'false');
@@ -1038,7 +1051,6 @@ function renderPresetKeyboardList() {
                     div.appendChild(chk);
                     div.appendChild(text);
 
-                    // 绑定选中事件
                     const toggle = (e) => { e.preventDefault(); togglePresetSelection(div, chk); };
                     div.addEventListener('click', toggle);
                     div.addEventListener('keydown', (e) => {
@@ -1046,7 +1058,7 @@ function renderPresetKeyboardList() {
                     });
                 }
 
-                // 统一绑定焦点事件
+                // 焦点管理：所有项（包括已拥有的）都参与光标键导航
                 div.setAttribute('tabindex', index === 0 ? '0' : '-1');
                 div.addEventListener('keydown', (e) => {
                     if (e.key === 'ArrowDown') { e.preventDefault(); moveFocus(div, 'next'); }
