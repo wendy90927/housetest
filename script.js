@@ -91,7 +91,7 @@ let currentFamilyRooms = []; // 当前家庭已拥有的房间
         const savedUnits = JSON.parse(localStorage.getItem('custom_units') || '[]');
         UNIT_LIST = [...new Set([...UNIT_LIST, ...savedUnits])];
 
-        function learnNewUnit(unit) {
+function learnNewUnit(unit) {
             if(!unit) return;
             if(!UNIT_LIST.includes(unit)) {
                 UNIT_LIST.push(unit);
@@ -99,17 +99,27 @@ let currentFamilyRooms = []; // 当前家庭已拥有的房间
             }
         }
 
-let announceTimer = null;
+        const savedEmail = localStorage.getItem('savedEmail');
+        if(savedEmail && document.getElementById('login-email')) {
+            document.getElementById('login-email').value = savedEmail;
+        }
+
+        let announceTimer = null;
         window.announce = (msg, type = 'normal') => {
             const el = document.getElementById('live-announcer');
+            if(!el) return;
+            
             if (announceTimer) clearTimeout(announceTimer);
             
-            el.textContent = ''; // 先清空，确保读屏软件能检测到内容变化
+            el.textContent = ''; 
             
             setTimeout(() => {
                 el.textContent = msg;
-                if (msg.includes("成功") || msg.includes("已添加") || msg.includes("已删除") || msg.includes("已更新") || msg.includes("自动填入")) playSound('success');
-                else if (msg.includes("失败") || msg.includes("错误") || msg.includes("不足") || msg.includes("未找到")) playSound('error');
+                if (msg.includes("成功") || msg.includes("已添加") || msg.includes("已删除") || msg.includes("已更新") || msg.includes("自动填入") || msg.includes("已切换")) {
+                    playSound('success');
+                } else if (msg.includes("失败") || msg.includes("错误") || msg.includes("不足") || msg.includes("未找到")) {
+                    playSound('error');
+                }
             }, 50);
 
             announceTimer = setTimeout(() => el.textContent = '', 3000);
