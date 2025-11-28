@@ -613,6 +613,23 @@ const tabIds = ['tab-profile', 'tab-family', 'tab-rooms'];
             });
         });
 
+let unsubscribeProfile = null;
+
+        function loadUserProfile(user) {
+            if (unsubscribeProfile) unsubscribeProfile();
+            unsubscribeProfile = onSnapshot(doc(db, "profiles", user.uid), (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    userProfile.nickname = data.nickname || user.email;
+                    userProfile.identity = data.identity || '其他';
+                } else {
+                    userProfile.nickname = user.email;
+                    userProfile.identity = '其他';
+                }
+                if (currentScreen === 'settings') renderProfileUI();
+            });
+        }
+
 function renderProfileUI() {
             document.getElementById('set-nickname').value = userProfile.nickname;
             
