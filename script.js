@@ -570,8 +570,25 @@ loadUserFamilies(user);
             announce(`已切换到 ${activeBtn.innerText}`);
         }
 
-        ['tab-profile', 'tab-family', 'tab-rooms'].forEach(id => {
-            document.getElementById(id).addEventListener('click', () => switchSettingsTab(id));
+const tabIds = ['tab-profile', 'tab-family', 'tab-rooms'];
+        tabIds.forEach((id, index) => {
+            const el = document.getElementById(id);
+            el.addEventListener('click', () => switchSettingsTab(id));
+            el.addEventListener('keydown', (e) => {
+                let newIndex = -1;
+                if (e.key === 'ArrowRight') {
+                    newIndex = (index + 1) % tabIds.length;
+                } else if (e.key === 'ArrowLeft') {
+                    newIndex = (index - 1 + tabIds.length) % tabIds.length;
+                }
+                
+                if (newIndex !== -1) {
+                    e.preventDefault();
+                    const targetId = tabIds[newIndex];
+                    document.getElementById(targetId).focus(); // 移动焦点
+                    document.getElementById(targetId).click(); // 触发切换
+                }
+            });
         });
 
 // --- Profile Logic ---
@@ -592,21 +609,78 @@ loadUserFamilies(user);
             });
         }
 
-        function renderProfileUI() {
+function renderProfileUI() {
             document.getElementById('set-nickname').value = userProfile.nickname;
-            document.getElementById('set-identity').value = userProfile.identity;
+            
+            // 身份回显逻辑
+            const select = document.getElementById('set-identity-select');
+            const customBox = document.getElementById('box-identity-custom');
+            const customInput = document.getElementById('set-identity-custom');
+            const standardOptions = ['爸爸', '妈妈', '儿子', '女儿', '老人'];
+
+            if (standardOptions.includes(userProfile.identity)) {
+                select.value = userProfile.identity;
+                customBox.classList.add('hidden');
+                customInput.value = '';
+            } else {
+                select.value = '自定义';
+                customBox.classList.remove('hidden');
+                customInput.value = userProfile.identity;
+            }
+
+            // 重置密码修改区状态
+            document.getElementById('box-password-change').classList.add('hidden');
+            document.getElementById('set-new-pass').value = '';
+            document.getElementById('set-confirm-pass').value = '';
         }
 
+        // 监听身份下拉框变化
+        document.getElementById('set-identity-select').addEventListener('change', (e) => {
+            const box = document.getElementById('box-identity-custom');
+            if (e.target.value === '自定义') {
+                box.classList.remove('hidden');
+                document.getElementById('set-identity-custom').focus();
+                announce("请输入自定义身份");
+            } else {
+                box.classList.add('hidden');
+            }
+        });
+
+        // 监听修改密码按钮
+        document.getElementById('btn-toggle-password').addEventListener('click', () => {
+            const box = document.getElementById('box-password-change');
+            if (box.classList.contains('hidden')) {
+                box.classList.remove('hidden');
+                document.getElementById('set-new-pass').focus();
+                announce("已展开密码修改框");
+            } else {
+                box.classList.add('hidden');
+                announce("已收起");
+            }
+        });
+
+        // 监听保存按钮
         document.getElementById('btn-save-profile').addEventListener('click', async () => {
             const nick = document.getElementById('set-nickname').value.trim();
-            const iden = document.getElementById('set-identity').value.trim();
+            const selectVal = document.getElementById('set-identity-select').value;
+            let finalIdentity = selectVal;
+            
+            if (selectVal === '自定义') {
+                finalIdentity = document.getElementById('set-identity-custom').value.trim();
+                if (!finalIdentity) {
+                    announce("请输入自定义身份");
+                    document.getElementById('set-identity-custom').focus();
+                    return;
+                }
+            }
+
             const newPass = document.getElementById('set-new-pass').value;
             const confirmPass = document.getElementById('set-confirm-pass').value;
             
             try {
                 await setDoc(doc(db, "profiles", auth.currentUser.uid), {
                     nickname: nick || auth.currentUser.email,
-                    identity: iden || '其他',
+                    identity: finalIdentity,
                     updatedAt: serverTimestamp()
                 }, { merge: true });
                 announce("个人资料已保存");
@@ -616,19 +690,26 @@ loadUserFamilies(user);
                 return;
             }
 
-            if (newPass) {
+            // 如果展开了密码框且输入了密码
+            const passBox = document.getElementById('box-password-change');
+            if (!passBox.classList.contains('hidden') && newPass) {
                 if (newPass.length < 6) { announce("新密码太短"); return; }
                 if (newPass !== confirmPass) { announce("两次密码不一致"); return; }
                 try {
                     await updatePassword(auth.currentUser, newPass);
                     announce("密码修改成功");
-                    document.getElementById('set-new-pass').value = '';
-                    document.getElementById('set-confirm-pass').value = '';
+                    passBox.classList.add('hidden');
                 } catch (e) {
                     console.error(e);
                     announce("密码修改失败，请重试");
                 }
             }
+        });
+
+        // 监听取消按钮
+        document.getElementById('btn-profile-cancel').addEventListener('click', () => {
+             switchScreen('screen-home');
+             announce("已取消");
         });
 
         document.getElementById('tab-profile').addEventListener('click', renderProfileUI);

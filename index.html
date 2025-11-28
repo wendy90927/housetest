@@ -380,32 +380,49 @@
 
         <div class="max-w-3xl mx-auto w-full p-4 flex-grow overflow-y-auto">
             
-            <div id="panel-profile" role="tabpanel" tabindex="0" aria-labelledby="tab-profile">
+<div id="panel-profile" role="tabpanel" tabindex="0" aria-labelledby="tab-profile">
                 <div class="bg-white p-6 rounded-lg shadow space-y-6">
                     <div>
                         <label for="set-nickname" class="block font-bold mb-2 text-lg">昵称</label>
                         <input type="text" id="set-nickname" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg">
                     </div>
+                    
                     <div>
-                        <label for="set-identity" class="block font-bold mb-2 text-lg">家庭身份 (可直接输入自定义)</label>
-                        <input list="identity-options" id="set-identity" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg" placeholder="选择或输入...">
-                        <datalist id="identity-options">
-                            <option value="爸爸">
-                            <option value="妈妈">
-                            <option value="儿子">
-                            <option value="女儿">
-                            <option value="爷爷">
-                            <option value="奶奶">
-                        </datalist>
+                        <label for="set-identity-select" class="block font-bold mb-2 text-lg">家庭身份</label>
+                        <select id="set-identity-select" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg bg-white text-black">
+                            <option value="爸爸">爸爸</option>
+                            <option value="妈妈">妈妈</option>
+                            <option value="儿子">儿子</option>
+                            <option value="女儿">女儿</option>
+                            <option value="老人">老人</option>
+                            <option value="自定义">自定义 (手动输入)</option>
+                        </select>
+                        
+                        <div id="box-identity-custom" class="hidden mt-3">
+                            <label for="set-identity-custom" class="block font-bold mb-2 text-gray-700">请输入自定义身份：</label>
+                            <input type="text" id="set-identity-custom" class="w-full p-3 border-2 border-blue-300 rounded-lg text-lg" placeholder="例如：二姨">
+                        </div>
                     </div>
+
                     <div class="border-t pt-4 mt-4">
-                        <h3 class="font-bold text-lg mb-4">修改密码 (选填)</h3>
-                        <label for="set-new-pass" class="block font-bold mb-2">新密码</label>
-                        <input type="password" id="set-new-pass" class="w-full p-3 border-2 border-gray-300 rounded-lg mb-4">
-                        <label for="set-confirm-pass" class="block font-bold mb-2">确认新密码</label>
-                        <input type="password" id="set-confirm-pass" class="w-full p-3 border-2 border-gray-300 rounded-lg">
+                        <h3 class="font-bold text-lg mb-4">安全设置</h3>
+                        <button id="btn-toggle-password" class="w-full py-3 bg-gray-100 text-blue-800 font-bold rounded-lg border border-blue-200 hover:bg-gray-200 text-left px-4 flex justify-between items-center">
+                            <span>修改密码</span>
+                            <span class="text-sm text-gray-500">点击展开</span>
+                        </button>
+
+                        <div id="box-password-change" class="hidden mt-4 p-4 bg-gray-50 rounded border border-gray-200">
+                            <label for="set-new-pass" class="block font-bold mb-2">新密码</label>
+                            <input type="password" id="set-new-pass" class="w-full p-3 border-2 border-gray-300 rounded-lg mb-4">
+                            <label for="set-confirm-pass" class="block font-bold mb-2">确认新密码</label>
+                            <input type="password" id="set-confirm-pass" class="w-full p-3 border-2 border-gray-300 rounded-lg">
+                        </div>
                     </div>
-                    <button id="btn-save-profile" class="w-full bg-blue-600 text-white p-4 rounded-lg font-bold text-xl mt-4">保存个人资料</button>
+
+                    <div class="flex gap-4 mt-6">
+                        <button id="btn-profile-cancel" class="flex-1 bg-gray-200 text-gray-800 p-4 rounded-lg font-bold text-xl border-2 border-gray-300 hover:bg-gray-300">取消</button>
+                        <button id="btn-save-profile" class="flex-1 bg-blue-600 text-white p-4 rounded-lg font-bold text-xl hover:bg-blue-700 shadow-lg">保存</button>
+                    </div>
                 </div>
             </div>
 
