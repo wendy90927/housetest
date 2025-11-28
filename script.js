@@ -569,6 +569,50 @@ function switchSettingsTab(tabId) {
             activeBtn.classList.remove('text-gray-600');
         }
 
+const tabIds = ['tab-profile', 'tab-family', 'tab-rooms'];
+        
+        // 绑定键盘事件
+        tabIds.forEach((id, index) => {
+            const el = document.getElementById(id);
+            if(!el) return;
+
+            // 初始化TabIndex
+            el.setAttribute('tabindex', index === 0 ? '0' : '-1');
+
+            el.addEventListener('click', () => {
+                switchSettingsTab(id);
+                el.focus(); 
+            });
+
+            el.addEventListener('keydown', (e) => {
+                let newIndex = -1;
+                // 只处理左右方向键
+                if (e.key === 'ArrowRight') {
+                    newIndex = (index + 1) % tabIds.length;
+                } else if (e.key === 'ArrowLeft') {
+                    newIndex = (index - 1 + tabIds.length) % tabIds.length;
+                }
+                
+                if (newIndex !== -1) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const targetId = tabIds[newIndex];
+                    const targetEl = document.getElementById(targetId);
+                    
+                    // 重置所有tab的焦点状态
+                    tabIds.forEach(tid => {
+                        const t = document.getElementById(tid);
+                        if(t) t.setAttribute('tabindex', '-1');
+                    });
+                    
+                    // 激活目标tab
+                    targetEl.setAttribute('tabindex', '0');
+                    targetEl.focus();
+                    targetEl.click();
+                }
+            });
+        });
+
 // 监听身份下拉框变化
         document.getElementById('set-identity-select').addEventListener('change', (e) => {
             const box = document.getElementById('box-identity-custom');
@@ -580,19 +624,49 @@ function switchSettingsTab(tabId) {
             }
         });
 
-        // 监听修改密码按钮
-        document.getElementById('btn-toggle-password').addEventListener('click', () => {
-            const box = document.getElementById('box-password-change');
-            const btnText = document.querySelector('#btn-toggle-password span:last-child');
-            if (box.classList.contains('hidden')) {
-                box.classList.remove('hidden');
-                document.getElementById('set-new-pass').focus();
-                btnText.textContent = "点击收起";
-            } else {
-                box.classList.add('hidden');
-                btnText.textContent = "点击展开";
-            }
-        });
+// 监听修改密码按钮 (打开弹窗)
+        const btnPassModal = document.getElementById('btn-open-password-modal');
+        if (btnPassModal) {
+            btnPassModal.addEventListener('click', () => {
+                const m = document.getElementById('modal-change-pass');
+                m.classList.remove('hidden');
+                document.getElementById('input-new-pass').value = '';
+                document.getElementById('input-confirm-pass').value = '';
+                setTimeout(() => document.getElementById('title-change-pass').focus(), 100);
+            });
+        }
+
+        // 密码弹窗：取消
+        const btnPassCancel = document.getElementById('btn-pass-cancel');
+        if (btnPassCancel) {
+            btnPassCancel.addEventListener('click', () => {
+                document.getElementById('modal-change-pass').classList.add('hidden');
+                if(btnPassModal) btnPassModal.focus(); // 焦点归位
+                announce("已取消修改密码");
+            });
+        }
+
+        // 密码弹窗：确定
+        const btnPassSave = document.getElementById('btn-pass-save');
+        if (btnPassSave) {
+            btnPassSave.addEventListener('click', async () => {
+                const p1 = document.getElementById('input-new-pass').value;
+                const p2 = document.getElementById('input-confirm-pass').value;
+                
+                if (p1.length < 6) { announce("密码太短，至少6位"); return; }
+                if (p1 !== p2) { announce("两次密码不一致"); return; }
+                
+                try {
+                    await updatePassword(auth.currentUser, p1);
+                    announce("密码修改成功");
+                    document.getElementById('modal-change-pass').classList.add('hidden');
+                    if(btnPassModal) btnPassModal.focus();
+                } catch (e) {
+                    console.error(e);
+                    announce("修改失败，可能需要重新登录");
+                }
+            });
+        }
 
         // 监听保存按钮
         document.getElementById('btn-save-profile').addEventListener('click', async () => {
@@ -624,22 +698,6 @@ function switchSettingsTab(tabId) {
                 announce("资料保存失败");
                 return;
             }
-
-            // 如果展开了密码框且输入了密码
-            const passBox = document.getElementById('box-password-change');
-            if (!passBox.classList.contains('hidden') && newPass) {
-                if (newPass.length < 6) { announce("新密码太短"); return; }
-                if (newPass !== confirmPass) { announce("两次密码不一致"); return; }
-                try {
-                    await updatePassword(auth.currentUser, newPass);
-                    announce("密码修改成功");
-                    passBox.classList.add('hidden');
-                } catch (e) {
-                    console.error(e);
-                    announce("密码修改失败，请重试");
-                }
-            }
-        });
 
         // 监听取消按钮
         document.getElementById('btn-profile-cancel').addEventListener('click', () => {
