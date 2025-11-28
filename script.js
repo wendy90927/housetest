@@ -1031,12 +1031,25 @@ document.getElementById('manage-family-select').focus();
             }
         }
 
-        function moveFocus(currentEl, dir) {
-            const sibling = dir === 'next' ? currentEl.nextElementSibling : currentEl.previousElementSibling;
-            if (sibling && sibling.getAttribute('role') === 'checkbox') {
+function moveFocus(currentEl, dir) {
+            const parent = currentEl.parentElement;
+            const items = Array.from(parent.children).filter(el => el.getAttribute('role') === 'checkbox');
+            if (items.length === 0) return;
+
+            const currentIndex = items.indexOf(currentEl);
+            let nextIndex;
+
+            if (dir === 'next') {
+                nextIndex = (currentIndex + 1) % items.length;
+            } else {
+                nextIndex = (currentIndex - 1 + items.length) % items.length;
+            }
+
+            const target = items[nextIndex];
+            if (target) {
                 currentEl.setAttribute('tabindex', '-1');
-                sibling.setAttribute('tabindex', '0');
-                sibling.focus();
+                target.setAttribute('tabindex', '0');
+                target.focus();
             }
         }
 
@@ -1088,9 +1101,22 @@ document.getElementById('manage-family-select').focus();
             announce("返回房间管理");
         });
         
-        safeListen('room-family-select', 'change', (e) => {
-             const tab = document.getElementById('tab-rooms');
-             if(tab) tab.click();
+safeListen('room-family-select', 'change', async (e) => {
+             const val = e.target.value;
+             if(val) currentFamilyId = val;
+             
+             if (!currentFamilyId) return;
+             try {
+                const famDoc = await getDoc(doc(db, "families", currentFamilyId));
+                if (famDoc.exists()) {
+                    currentFamilyRooms = famDoc.data().rooms || [];
+                } else {
+                    currentFamilyRooms = [];
+                }
+                announce("已切换家庭，房间列表已更新");
+             } catch(err) {
+                 console.error(err);
+             }
         });
 
         safeListen('btn-back-data', 'click', () => switchScreen('screen-home'));
