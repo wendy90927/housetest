@@ -650,7 +650,18 @@ let unsubscribeProfile = null;
                 if (btnAccount) {
                     btnAccount.setAttribute('aria-label', `当前账号：${displayNick}，${email}，点击展开菜单`);
                 }
+// 更新设置页面的UI
                 if (currentScreen === 'settings') renderProfileUI();
+                
+                // 强制更新主页顶部账户按钮的读屏标签和文字
+                const topBtn = document.getElementById('btn-account-menu');
+                const topText = document.getElementById('user-email-display');
+                if (topBtn && topText) {
+                    const finalNick = userProfile.nickname || user.email.split('@')[0];
+                    topText.textContent = finalNick;
+                    // 按照要求的格式设置 aria-label
+                    topBtn.setAttribute('aria-label', `当前账号：${finalNick}，${user.email}，点击展开菜单`);
+                }
             });
         }
 
@@ -956,51 +967,99 @@ document.getElementById('manage-family-select').focus();
         });
 
         // 逻辑：渲染删除列表
-function renderDeleteRoomList() {
+// 存储用户在删除界面勾选的房间
+        let pendingDeleteRooms = new Set();
+
+        function renderDeleteRoomList() {
             const container = document.getElementById('list-delete-rooms');
             if(!container) return;
             container.innerHTML = '';
+            pendingDeleteRooms.clear();
+            
             if(currentFamilyRooms.length === 0) {
-                container.innerHTML = '<p class="text-gray-500 text-lg font-bold">当前没有任何房间。</p>';
+                container.innerHTML = '<p class="text-gray-500 text-lg font-bold p-2">当前没有任何房间。</p>';
+                document.getElementById('btn-confirm-del-rooms').disabled = true;
                 return;
             }
-            currentFamilyRooms.forEach(room => {
-                const btn = document.createElement('button');
-                btn.className = "w-full p-4 bg-white border-2 border-red-200 text-red-800 rounded-lg font-bold text-xl shadow-sm hover:bg-red-50 text-left mb-3";
-                btn.textContent = `删除 ${room}`;
-                btn.onclick = () => {
-                    openGenericConfirm(`确定要永久删除“${room}”吗？`, async () => {
-                        // 1. 先获取最新数据，防止状态不同步
-                        const snap = await getDoc(doc(db, "families", currentFamilyId));
-                        if (snap.exists()) {
-                             let latestRooms = snap.data().rooms || [];
-                             // 2. 过滤掉要删除的房间
-                             latestRooms = latestRooms.filter(r => r !== room);
-                             // 3. 更新全局变量和数据库
-                             currentFamilyRooms = latestRooms;
-                             await updateDoc(doc(db, "families", currentFamilyId), {
-                                 rooms: latestRooms,
-                                 updatedAt: serverTimestamp()
-                             });
-                             // 4. 重新渲染列表
-                             renderDeleteRoomList();
-                             announce(`已删除 ${room}`);
-                             
-                             // 5. 焦点管理：尝试聚焦第一个按钮或返回键
-                             setTimeout(() => {
-                                 const firstBtn = container.querySelector('button');
-                                 if(firstBtn) firstBtn.focus();
-                                 else {
-                                     const backBtn = document.getElementById('btn-back-from-del-room');
-                                     if(backBtn) backBtn.focus();
-                                 }
-                             }, 100);
-                        }
-                    });
+            
+            document.getElementById('btn-confirm-del-rooms').disabled = false;
+
+            currentFamilyRooms.forEach((room, index) => {
+                const div = document.createElement('div');
+                div.className = "flex items-center justify-between p-4 rounded-lg cursor-pointer border-2 border-gray-200 bg-white hover:bg-red-50 focus:border-red-600 focus:ring-2 focus:ring-red-200 outline-none transition-all";
+                div.setAttribute('role', 'checkbox');
+                div.setAttribute('aria-checked', 'false');
+                div.setAttribute('tabindex', index === 0 ? '0' : '-1');
+                
+                div.innerHTML = `
+                    <span class="text-xl font-bold text-gray-800">${room}</span>
+                    <div class="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center status-icon">
+                        <span class="hidden text-red-600 font-bold text-lg">✕</span>
+                    </div>
+                `;
+
+                // 绑定点击和键盘事件（复用之前的通用交互模式，但针对删除场景）
+                const toggle = () => {
+                    const iconBox = div.querySelector('.status-icon');
+                    const mark = iconBox.querySelector('span');
+                    
+                    if(pendingDeleteRooms.has(room)) {
+                        pendingDeleteRooms.delete(room);
+                        div.setAttribute('aria-checked', 'false');
+                        div.classList.remove('bg-red-50', 'border-red-500');
+                        div.classList.add('border-gray-200');
+                        iconBox.classList.remove('border-red-500');
+                        iconBox.classList.add('border-gray-300');
+                        mark.classList.add('hidden');
+                        announce(`取消选择 ${room}`);
+                    } else {
+                        pendingDeleteRooms.add(room);
+                        div.setAttribute('aria-checked', 'true');
+                        div.classList.add('bg-red-50', 'border-red-500');
+                        div.classList.remove('border-gray-200');
+                        iconBox.classList.add('border-red-500');
+                        iconBox.classList.remove('border-gray-300');
+                        mark.classList.remove('hidden');
+                        announce(`已标记删除 ${room}`);
+                    }
                 };
-                container.appendChild(btn);
+
+                div.addEventListener('click', toggle);
+                div.addEventListener('keydown', (e) => {
+                    if(e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); }
+                    else if(e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        moveFocus(div, e.key === 'ArrowDown' ? 'next' : 'prev');
+                    }
+                });
+
+                container.appendChild(div);
             });
         }
+
+        // 绑定删除界面的“保存并删除”按钮
+        safeListen('btn-confirm-del-rooms', 'click', () => {
+            if(pendingDeleteRooms.size === 0) {
+                announce("未勾选任何房间");
+                return;
+            }
+            
+            openGenericConfirm(`确定删除这 ${pendingDeleteRooms.size} 个房间吗？`, async () => {
+                // 执行真正的删除逻辑：保留那些【不在】删除列表里的房间
+                const newRooms = currentFamilyRooms.filter(r => !pendingDeleteRooms.has(r));
+                
+                currentFamilyRooms = newRooms;
+                await saveRoomsToFirestore();
+                
+                announce("房间已删除");
+                closeModals();
+                
+                // 返回设置页
+                switchScreen('screen-settings');
+                const tab = document.getElementById('tab-rooms');
+                if(tab) tab.click();
+            });
+        });
 
         // 渲染预设房间列表
 function renderPresetKeyboardList() {
@@ -1125,25 +1184,7 @@ function renderPresetKeyboardList() {
             announce("已取消");
         });
 
-        safeListen('btn-confirm-add-rooms', 'click', async () => {
-             const customName = document.getElementById('input-custom-room').value.trim();
-             if(customName) {
-                 if(currentFamilyRooms.includes(customName)) {
-                     announce("房间已存在，跳过");
-                 } else {
-                     pendingSelectedDefaults.add(customName);
-                 }
-             }
-             if (pendingSelectedDefaults.size === 0) { announce("未选择任何新房间"); return; }
-             pendingSelectedDefaults.forEach(r => {
-                 if (!currentFamilyRooms.includes(r)) currentFamilyRooms.push(r);
-             });
-             await saveRoomsToFirestore();
-             announce(`成功添加 ${pendingSelectedDefaults.size} 个房间`);
-             switchScreen('screen-settings');
-             const tab = document.getElementById('tab-rooms');
-             if(tab) tab.click();
-        });
+
 
         safeListen('btn-back-from-del-room', 'click', () => {
             switchScreen('screen-settings');

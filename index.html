@@ -498,14 +498,15 @@
             <h1 class="text-xl font-bold text-center outline-none" tabindex="-1">删除房间</h1>
         </div>
         <div class="max-w-3xl mx-auto w-full p-4 flex-grow overflow-y-auto">
-            <p class="font-bold text-lg mb-4 text-gray-700">点击下列按钮即可删除对应房间：</p>
-            <div id="list-delete-rooms" class="flex flex-col gap-3">
+<p class="font-bold text-lg mb-4 text-gray-700">请勾选要删除的房间，然后点击保存：</p>
+            
+            <div id="list-delete-rooms" class="flex flex-col gap-2 max-h-80 overflow-y-auto mb-6" role="group" aria-label="待删除房间列表">
                 </div>
             
-            <div class="mt-8">
-                <button id="btn-back-from-del-room" class="w-full bg-gray-200 text-gray-800 p-4 rounded-lg font-bold text-xl hover:bg-gray-300">返回上一页</button>
+            <div class="flex gap-4 mt-4">
+                <button id="btn-confirm-del-rooms" class="flex-1 bg-red-600 text-white p-4 rounded-lg font-bold text-xl shadow hover:bg-red-700">保存并删除</button>
+                <button id="btn-back-from-del-room" class="flex-1 bg-gray-200 text-gray-800 p-4 rounded-lg font-bold text-xl hover:bg-gray-300">取消</button>
             </div>
-        </div>
     </div>
 
     <div id="modal-forgot" class="hidden fixed inset-0 bg-black bg-opacity-70 z-50 flex justify-center items-center">
