@@ -640,6 +640,16 @@ let unsubscribeProfile = null;
                     userProfile.nickname = user.email;
                     userProfile.identity = '其他';
                 }
+// 实时更新主页顶部账户按钮显示
+                const email = user.email || '';
+                const displayNick = userProfile.nickname || email.split('@')[0];
+                const displayEl = document.getElementById('user-email-display');
+                const btnAccount = document.getElementById('btn-account-menu');
+                
+                if (displayEl) displayEl.textContent = displayNick;
+                if (btnAccount) {
+                    btnAccount.setAttribute('aria-label', `当前账号：${displayNick}，${email}，点击展开菜单`);
+                }
                 if (currentScreen === 'settings') renderProfileUI();
             });
         }
@@ -871,7 +881,7 @@ function renderProfileUI() {
 const docRef = await addDoc(familiesRef, {
                         name: name,
                         location: loc,
-                        rooms: ["客厅", "厨房", "卧室", "卫生间"],
+rooms: ["客厅", "厨房", "卧室", "餐厅", "卫生间"],
                         uid: auth.currentUser.uid,
                         createdAt: serverTimestamp()
                     });
@@ -993,79 +1003,102 @@ function renderDeleteRoomList() {
         }
 
         // 渲染预设房间列表
-        function renderPresetKeyboardList() {
+function renderPresetKeyboardList() {
             const container = document.getElementById('preset-room-list');
             if(!container) return;
             container.innerHTML = '';
             pendingSelectedDefaults.clear(); 
+            
+            // 过滤出还没添加过的房间
             const availableDefaults = SYSTEM_ROOMS.filter(r => !currentFamilyRooms.includes(r));
+            
             if (availableDefaults.length === 0) {
                 container.innerHTML = '<div class="p-4 text-gray-500 font-bold" tabindex="0">常用房间都已添加完毕。</div>';
                 return;
             }
+
             availableDefaults.forEach((room, index) => {
+                // 创建可聚焦的选项行
                 const div = document.createElement('div');
-                div.className = "flex items-center gap-3 p-3 rounded-lg cursor-pointer border-2 border-transparent mb-2 bg-white";
+                // 默认未选中
+                const isChecked = false;
+                
+                // 样式与ARIA设置
+                div.className = "flex items-center justify-between p-4 rounded-lg cursor-pointer border-2 border-gray-200 bg-white hover:bg-gray-50 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 outline-none transition-all";
                 div.setAttribute('role', 'checkbox');
-                div.setAttribute('aria-checked', 'false'); 
-                div.setAttribute('tabindex', index === 0 ? '0' : '-1'); 
+                div.setAttribute('aria-checked', 'false');
+                // 只有第一个元素可聚焦（Roving Tabindex 初始状态）
+                div.setAttribute('tabindex', index === 0 ? '0' : '-1');
                 div.dataset.room = room;
-                const chk = document.createElement('div');
-                chk.className = "w-6 h-6 border-2 border-gray-400 rounded flex items-center justify-center chk-box mr-2";
-                const text = document.createElement('span');
-                text.className = "text-xl font-bold";
-                text.textContent = room;
-                div.appendChild(chk);
-                div.appendChild(text);
-                const toggle = (e) => { e.preventDefault(); togglePresetSelection(div, chk); };
-                div.addEventListener('click', toggle);
-                div.addEventListener('keydown', (e) => {
-                    if (e.key === ' ' || e.key === 'Enter') toggle(e);
-                    else if (e.key === 'ArrowDown') { e.preventDefault(); moveFocus(div, 'next'); }
-                    else if (e.key === 'ArrowUp') { e.preventDefault(); moveFocus(div, 'prev'); }
-                });
+
+                // 内部视觉结构
+                div.innerHTML = `
+                    <span class="text-xl font-bold text-gray-800">${room}</span>
+                    <div class="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center status-icon">
+                        <span class="hidden text-white font-bold">✓</span>
+                    </div>
+                `;
+
+                // 绑定交互事件
+                div.addEventListener('click', () => toggleRoomSelection(div, room));
+                div.addEventListener('keydown', (e) => handleRoomListKeydown(e, div, room));
+                
                 container.appendChild(div);
             });
         }
 
-        function togglePresetSelection(el, chkIcon) {
-            const room = el.dataset.room;
-            if (pendingSelectedDefaults.has(room)) {
-                pendingSelectedDefaults.delete(room);
+        // 切换选中状态的核心逻辑
+        function toggleRoomSelection(el, roomName) {
+            const iconBox = el.querySelector('.status-icon');
+            const checkMark = iconBox.querySelector('span');
+            
+            if (pendingSelectedDefaults.has(roomName)) {
+                // 执行取消
+                pendingSelectedDefaults.delete(roomName);
                 el.setAttribute('aria-checked', 'false');
-                el.classList.remove('bg-blue-50', 'border-blue-300');
-                chkIcon.innerHTML = '';
-                chkIcon.classList.remove('bg-blue-600', 'border-blue-600');
-                chkIcon.classList.add('border-gray-400');
-                announce(`已取消 ${room}`);
+                el.classList.remove('bg-blue-50', 'border-blue-500');
+                el.classList.add('border-gray-200');
+                
+                iconBox.classList.remove('bg-blue-600', 'border-blue-600');
+                iconBox.classList.add('border-gray-300');
+                checkMark.classList.add('hidden');
+                
+                announce(`已取消 ${roomName}`);
             } else {
-                pendingSelectedDefaults.add(room);
+                // 执行选中
+                pendingSelectedDefaults.add(roomName);
                 el.setAttribute('aria-checked', 'true');
-                el.classList.add('bg-blue-50', 'border-blue-300');
-                chkIcon.innerHTML = '<span class="text-white text-sm font-bold">✓</span>';
-                chkIcon.classList.remove('border-gray-400');
-                chkIcon.classList.add('bg-blue-600', 'border-blue-600');
-                announce(`已选中 ${room}`);
+                el.classList.add('bg-blue-50', 'border-blue-500');
+                el.classList.remove('border-gray-200');
+                
+                iconBox.classList.add('bg-blue-600', 'border-blue-600');
+                iconBox.classList.remove('border-gray-300');
+                checkMark.classList.remove('hidden');
+                
+                announce(`已选中 ${roomName}`);
             }
         }
 
-function moveFocus(currentEl, dir) {
-            const parent = currentEl.parentElement;
-            const items = Array.from(parent.children).filter(el => el.getAttribute('role') === 'checkbox');
-            if (items.length === 0) return;
+        // 键盘导航处理 (上下键漫游 + 空格键选中)
+        function handleRoomListKeydown(e, currentEl, roomName) {
+            if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault();
+                toggleRoomSelection(currentEl, roomName);
+            } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                const allItems = Array.from(document.querySelectorAll('#preset-room-list [role="checkbox"]'));
+                const currentIndex = allItems.indexOf(currentEl);
+                let nextIndex;
 
-            const currentIndex = items.indexOf(currentEl);
-            let nextIndex;
+                if (e.key === 'ArrowDown') {
+                    nextIndex = (currentIndex + 1) % allItems.length;
+                } else {
+                    nextIndex = (currentIndex - 1 + allItems.length) % allItems.length;
+                }
 
-            if (dir === 'next') {
-                nextIndex = (currentIndex + 1) % items.length;
-            } else {
-                nextIndex = (currentIndex - 1 + items.length) % items.length;
-            }
-
-            const target = items[nextIndex];
-            if (target) {
+                // 移动焦点：旧元素设为 -1，新元素设为 0 并聚焦
                 currentEl.setAttribute('tabindex', '-1');
+                const target = allItems[nextIndex];
                 target.setAttribute('tabindex', '0');
                 target.focus();
             }
