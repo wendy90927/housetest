@@ -970,7 +970,7 @@ document.getElementById('manage-family-select').focus();
 // 存储用户在删除界面勾选的房间
         let pendingDeleteRooms = new Set();
 
-        function renderDeleteRoomList() {
+function renderDeleteRoomList() {
             const container = document.getElementById('list-delete-rooms');
             if(!container) return;
             container.innerHTML = '';
@@ -985,53 +985,66 @@ document.getElementById('manage-family-select').focus();
             document.getElementById('btn-confirm-del-rooms').disabled = false;
 
             currentFamilyRooms.forEach((room, index) => {
-                const div = document.createElement('div');
-                div.className = "flex items-center justify-between p-4 rounded-lg cursor-pointer border-2 border-gray-200 bg-white hover:bg-red-50 focus:border-red-600 focus:ring-2 focus:ring-red-200 outline-none transition-all";
-                div.setAttribute('role', 'checkbox');
-                div.setAttribute('aria-checked', 'false');
-                div.setAttribute('tabindex', index === 0 ? '0' : '-1');
+                // 使用 label 元素包裹，这是无障碍的标准做法
+                const label = document.createElement('label');
+                // 设置相对定位，以便容纳内部结构
+                label.className = "relative block cursor-pointer group outline-none mb-3";
                 
-                div.innerHTML = `
-                    <span class="text-xl font-bold text-gray-800">${room}</span>
-                    <div class="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center status-icon">
-                        <span class="hidden text-red-600 font-bold text-lg">✕</span>
+                // 核心结构：
+                // 1. input checkbox: 它是 peer (同伴)，隐藏但可聚焦
+                // 2. 下面的 div: 根据 peer 的状态 (peer-checked) 自动变色
+                label.innerHTML = `
+                    <input type="checkbox" class="peer sr-only" tabindex="${index === 0 ? '0' : '-1'}">
+                    
+                    <div class="flex items-center justify-between p-4 rounded-lg border-2 border-gray-200 bg-white 
+                                transition-all
+                                peer-focus:ring-4 peer-focus:ring-red-200 peer-focus:border-red-600 
+                                peer-checked:bg-red-50 peer-checked:border-red-600">
+                        
+                        <span class="text-xl font-bold text-gray-800">${room}</span>
+                        
+                        <div class="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center bg-white
+                                    peer-checked:border-red-600 peer-checked:bg-red-600">
+                            <span class="text-white font-bold text-lg opacity-0 peer-checked:opacity-100">✕</span>
+                        </div>
                     </div>
                 `;
 
-                // 绑定点击和键盘事件（复用之前的通用交互模式，但针对删除场景）
-                const toggle = () => {
-                    const iconBox = div.querySelector('.status-icon');
-                    const mark = iconBox.querySelector('span');
-                    
-                    if(pendingDeleteRooms.has(room)) {
-                        pendingDeleteRooms.delete(room);
-                        div.setAttribute('aria-checked', 'false');
-                        div.classList.remove('bg-red-50', 'border-red-500');
-                        div.classList.add('border-gray-200');
-                        iconBox.classList.remove('border-red-500');
-                        iconBox.classList.add('border-gray-300');
-                        mark.classList.add('hidden');
-                    } else {
-                        pendingDeleteRooms.add(room);
-                        div.setAttribute('aria-checked', 'true');
-                        div.classList.add('bg-red-50', 'border-red-500');
-                        div.classList.remove('border-gray-200');
-                        iconBox.classList.add('border-red-500');
-                        iconBox.classList.remove('border-gray-300');
-                        mark.classList.remove('hidden');
-                    }
-                };
+                const input = label.querySelector('input');
 
-                div.addEventListener('click', toggle);
-                div.addEventListener('keydown', (e) => {
-                    if(e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); }
-                    else if(e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                        e.preventDefault();
-                        moveFocus(div, e.key === 'ArrowDown' ? 'next' : 'prev');
+                // 监听原生 change 事件，只负责维护数据，不负责读屏（浏览器自带了）
+                input.addEventListener('change', () => {
+                    if(input.checked) {
+                        pendingDeleteRooms.add(room);
+                    } else {
+                        pendingDeleteRooms.delete(room);
                     }
                 });
 
-                container.appendChild(div);
+                // 键盘导航逻辑：接管上下箭头，实现焦点漫游
+                input.addEventListener('keydown', (e) => {
+                    if(e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        // 获取当前列表所有 checkbox
+                        const allInputs = document.querySelectorAll('#list-delete-rooms input');
+                        const currentIndex = Array.from(allInputs).indexOf(input);
+                        let nextIndex;
+                        
+                        if (e.key === 'ArrowDown') {
+                            nextIndex = (currentIndex + 1) % allInputs.length;
+                        } else {
+                            nextIndex = (currentIndex - 1 + allInputs.length) % allInputs.length;
+                        }
+                        
+                        // 移动 tabindex
+                        input.setAttribute('tabindex', '-1');
+                        const target = allInputs[nextIndex];
+                        target.setAttribute('tabindex', '0');
+                        target.focus();
+                    }
+                });
+
+                container.appendChild(label);
             });
         }
 
