@@ -1011,7 +1011,6 @@ document.getElementById('manage-family-select').focus();
                         iconBox.classList.remove('border-red-500');
                         iconBox.classList.add('border-gray-300');
                         mark.classList.add('hidden');
-                        announce(`取消选择 ${room}`);
                     } else {
                         pendingDeleteRooms.add(room);
                         div.setAttribute('aria-checked', 'true');
@@ -1020,7 +1019,6 @@ document.getElementById('manage-family-select').focus();
                         iconBox.classList.add('border-red-500');
                         iconBox.classList.remove('border-gray-300');
                         mark.classList.remove('hidden');
-                        announce(`已标记删除 ${room}`);
                     }
                 };
 
@@ -1177,6 +1175,40 @@ function renderPresetKeyboardList() {
         }
 
         // 房间管理界面的返回与保存逻辑
+
+// 绑定“新增房间”界面的保存按钮
+        safeListen('btn-confirm-add-rooms', 'click', async () => {
+             const customInput = document.getElementById('input-custom-room');
+             const customName = customInput ? customInput.value.trim() : '';
+             
+             // 如果输入了自定义房间，先把它加入待添加列表
+             if(customName) {
+                 if(!currentFamilyRooms.includes(customName)) {
+                     pendingSelectedDefaults.add(customName);
+                 }
+             }
+
+             // 检查是否有内容
+             if (pendingSelectedDefaults.size === 0) { 
+                 announce("请选择或输入至少一个新房间"); 
+                 return; 
+             }
+
+             // 合并数据
+             pendingSelectedDefaults.forEach(r => {
+                 if (!currentFamilyRooms.includes(r)) currentFamilyRooms.push(r);
+             });
+
+             await saveRoomsToFirestore();
+             announce(`成功添加 ${pendingSelectedDefaults.size} 个房间`);
+             
+             // 清理并返回
+             if(customInput) customInput.value = '';
+             switchScreen('screen-settings');
+             const tab = document.getElementById('tab-rooms');
+             if(tab) tab.click();
+        });
+
         safeListen('btn-back-from-add-room', 'click', () => {
             switchScreen('screen-settings');
             const tab = document.getElementById('tab-rooms');
