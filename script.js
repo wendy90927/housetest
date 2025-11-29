@@ -985,21 +985,25 @@ function renderDeleteRoomList() {
             document.getElementById('btn-confirm-del-rooms').disabled = false;
 
             currentFamilyRooms.forEach((room, index) => {
-                // 使用 label 元素包裹，这是无障碍的标准做法
-                const label = document.createElement('label');
-                // 设置相对定位，以便容纳内部结构
-                label.className = "relative block cursor-pointer group outline-none mb-3";
+                // 创建一个相对定位的容器，不再使用 label 标签以免引起读屏混乱
+                const div = document.createElement('div');
+                div.className = "relative mb-3";
                 
-                // 核心结构：
-                // 1. input checkbox: 它是 peer (同伴)，隐藏但可聚焦
-                // 2. 下面的 div: 根据 peer 的状态 (peer-checked) 自动变色
-                label.innerHTML = `
-                    <input type="checkbox" class="peer sr-only" tabindex="${index === 0 ? '0' : '-1'}">
+                // 核心修改：
+                // 1. input 使用 absolute + opacity-0 铺满整个容器。它就在"屏幕内"，解决了"屏幕外"提示。
+                // 2. input 直接设置 aria-label，读屏软件只认这个，解决冗余朗读。
+                // 3. 下方的视觉 div 设置 aria-hidden="true"，对读屏完全不可见。
+                div.innerHTML = `
+                    <input type="checkbox" 
+                           class="peer absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer" 
+                           tabindex="${index === 0 ? '0' : '-1'}"
+                           aria-label="${room}">
                     
                     <div class="flex items-center justify-between p-4 rounded-lg border-2 border-gray-200 bg-white 
                                 transition-all
                                 peer-focus:ring-4 peer-focus:ring-red-200 peer-focus:border-red-600 
-                                peer-checked:bg-red-50 peer-checked:border-red-600">
+                                peer-checked:bg-red-50 peer-checked:border-red-600"
+                                aria-hidden="true">
                         
                         <span class="text-xl font-bold text-gray-800">${room}</span>
                         
@@ -1010,9 +1014,9 @@ function renderDeleteRoomList() {
                     </div>
                 `;
 
-                const input = label.querySelector('input');
+                const input = div.querySelector('input');
 
-                // 监听原生 change 事件，只负责维护数据，不负责读屏（浏览器自带了）
+                // 监听原生 change 事件
                 input.addEventListener('change', () => {
                     if(input.checked) {
                         pendingDeleteRooms.add(room);
@@ -1021,11 +1025,10 @@ function renderDeleteRoomList() {
                     }
                 });
 
-                // 键盘导航逻辑：接管上下箭头，实现焦点漫游
+                // 键盘导航：接管上下箭头
                 input.addEventListener('keydown', (e) => {
                     if(e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                         e.preventDefault();
-                        // 获取当前列表所有 checkbox
                         const allInputs = document.querySelectorAll('#list-delete-rooms input');
                         const currentIndex = Array.from(allInputs).indexOf(input);
                         let nextIndex;
@@ -1036,7 +1039,7 @@ function renderDeleteRoomList() {
                             nextIndex = (currentIndex - 1 + allInputs.length) % allInputs.length;
                         }
                         
-                        // 移动 tabindex
+                        // 移动焦点
                         input.setAttribute('tabindex', '-1');
                         const target = allInputs[nextIndex];
                         target.setAttribute('tabindex', '0');
@@ -1044,7 +1047,7 @@ function renderDeleteRoomList() {
                     }
                 });
 
-                container.appendChild(label);
+                container.appendChild(div);
             });
         }
 
