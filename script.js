@@ -876,10 +876,12 @@ function renderProfileUI() {
 // --- Family Logic ---
         let unsubscribeFamilies = null;
 
-        function loadUserFamilies(user) {
+function loadUserFamilies(user) {
             if (unsubscribeFamilies) unsubscribeFamilies();
-            // 查询当前用户创建的家庭
-unsubscribeFamilies = onSnapshot(q, (snapshot) => {
+            
+            const q = query(familiesRef, where("uid", "==", user.uid));
+            
+            unsubscribeFamilies = onSnapshot(q, (snapshot) => {
                 userFamilies = [];
                 snapshot.forEach(doc => {
                     userFamilies.push({ id: doc.id, ...doc.data() });
@@ -912,6 +914,7 @@ unsubscribeFamilies = onSnapshot(q, (snapshot) => {
                         refreshHomeList();
                     }
                 }
+                
                 renderFamilyOptions();
             });
         }
@@ -1655,6 +1658,25 @@ if(!name) return;
         async function execDelete() { try { await deleteDoc(doc(db, "items", currentActionItem.id)); announce("已删除"); closeModals(); } catch(e) { announce("删除失败"); } }
 
         // Global Keydown
+function refreshHomeRoomFilter() {
+            const systemRooms = ["客厅", "厨房", "卧室", "书房", "餐厅", "玄关", "卫生间", "洗衣房"];
+            let roomsToShow = systemRooms;
+            if (currentAppFamily && currentAppFamily.rooms) {
+                roomsToShow = [...new Set([...systemRooms, ...currentAppFamily.rooms])];
+            }
+            ['home-filter', 'takeout-filter'].forEach(id => {
+                const el = document.getElementById(id);
+                if(el) {
+                    el.innerHTML = '<option value="all">全部房间</option>';
+                    roomsToShow.forEach(r => {
+                        const opt = document.createElement('option');
+                        opt.value = r;
+                        opt.textContent = r;
+                        el.appendChild(opt);
+                    });
+                }
+            });
+        }
         window.addEventListener('keydown', (e) => {
             if(e.key === 'Escape') {
                 if (currentScreen === 'edit') return; 
