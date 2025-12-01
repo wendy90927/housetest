@@ -37,6 +37,7 @@ const familiesRef = collection(db, "families");
         let userProfile = { nickname: '', identity: '其他' };
         let userFamilies = []; 
         let currentFamilyId = null;
+let currentAppFamily = null; // 当前App全局选中的家庭对象
 let isEditingFamily = false;
 const SYSTEM_ROOMS = ["客厅", "厨房", "卧室", "书房", "餐厅", "玄关", "卫生间", "洗衣房", "阳台", "次卧", "阁楼", "地下室", "车库", "仓库"];
 let currentFamilyRooms = []; // 当前家庭已拥有的房间
@@ -223,6 +224,133 @@ loadUserFamilies(user);
                 menuAccount.querySelector('button').focus();
             } else { document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false'); }
         });
+// --- Family Switcher Logic ---
+        const btnSwitchFam = document.getElementById('btn-switch-family-trigger');
+        const subMenuFam = document.getElementById('submenu-family-list');
+
+        function renderFamilySubmenu() {
+            subMenuFam.innerHTML = '';
+            if (userFamilies.length === 0) {
+                subMenuFam.innerHTML = '<div class="p-4 text-gray-500 font-bold">暂无家庭，请先去设置创建</div>';
+                return;
+            }
+            
+            userFamilies.forEach((fam, index) => {
+                const btn = document.createElement('button');
+                const isCurrent = currentAppFamily && currentAppFamily.id === fam.id;
+                // 视觉上高亮当前家庭，并添加选中标记
+                const checkMark = isCurrent ? '<span class="sr-only">当前选中</span>✓ ' : '<span class="sr-only">未选中</span>';
+                
+                btn.className = `w-full text-left px-8 py-3 font-bold border-b border-blue-100 hover:bg-blue-100 focus:bg-blue-200 ${isCurrent ? 'text-blue-800 bg-blue-50' : 'text-gray-600'}`;
+                btn.innerHTML = `${checkMark}${fam.name}`;
+                btn.setAttribute('role', 'menuitem');
+                btn.setAttribute('tabindex', '-1'); // 默认不可聚焦，通过键盘管理
+                
+                // 点击或回车选择
+                const selectHandler = () => {
+                    switchAppFamily(fam);
+                    // 收起菜单
+                    subMenuFam.classList.add('hidden');
+                    btnSwitchFam.setAttribute('aria-expanded', 'false');
+                    btnSwitchFam.focus();
+                };
+                
+                btn.addEventListener('click', selectHandler);
+                
+                // 子菜单键盘导航
+                btn.addEventListener('keydown', (e) => {
+                    if (e.key === 'ArrowLeft') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        subMenuFam.classList.add('hidden');
+                        btnSwitchFam.setAttribute('aria-expanded', 'false');
+                        btnSwitchFam.focus();
+                        announce("已收起家庭菜单");
+                    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const items = subMenuFam.querySelectorAll('button');
+                        const currIdx = Array.from(items).indexOf(btn);
+                        let nextIdx;
+                        if (e.key === 'ArrowDown') nextIdx = (currIdx + 1) % items.length;
+                        else nextIdx = (currIdx - 1 + items.length) % items.length;
+                        items[nextIdx].focus();
+                    }
+                });
+
+                subMenuFam.appendChild(btn);
+            });
+        }
+
+        // 触发器交互
+        btnSwitchFam.addEventListener('click', () => {
+             // 点击也能切换展开状态
+             const isHidden = subMenuFam.classList.contains('hidden');
+             if(isHidden) {
+                 renderFamilySubmenu();
+                 subMenuFam.classList.remove('hidden');
+                 btnSwitchFam.setAttribute('aria-expanded', 'true');
+                 // 自动聚焦第一个
+                 const first = subMenuFam.querySelector('button');
+                 if(first) first.focus();
+             } else {
+                 subMenuFam.classList.add('hidden');
+                 btnSwitchFam.setAttribute('aria-expanded', 'false');
+             }
+        });
+
+        btnSwitchFam.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                // 展开
+                renderFamilySubmenu();
+                subMenuFam.classList.remove('hidden');
+                btnSwitchFam.setAttribute('aria-expanded', 'true');
+                announce("菜单已展开");
+                const first = subMenuFam.querySelector('button');
+                if(first) first.focus();
+            }
+        });
+
+        async function switchAppFamily(fam) {
+            if(!fam) return;
+            currentAppFamily = fam;
+            localStorage.setItem('last_family_id', fam.id);
+            announce(`已切换到家庭：${fam.name}`);
+            
+            // 刷新首页数据监听
+            if (auth.currentUser) {
+                setupDataListener(auth.currentUser.uid);
+                // 刷新主页顶部显示
+                loadUserProfile(auth.currentUser); 
+            }
+            
+            // 刷新房间筛选器 (确保只显示当前家庭的房间)
+            refreshHomeRoomFilter();
+        }
+
+        function refreshHomeRoomFilter() {
+            // 更新主页和取出页面的筛选下拉框
+            const systemRooms = ["客厅", "厨房", "卧室", "书房", "餐厅", "玄关", "卫生间", "洗衣房"];
+            // 如果当前家庭有自定义房间，合并显示
+            let roomsToShow = systemRooms;
+            if (currentAppFamily && currentAppFamily.rooms) {
+                roomsToShow = [...new Set([...systemRooms, ...currentAppFamily.rooms])];
+            }
+            
+            ['home-filter', 'takeout-filter'].forEach(id => {
+                const el = document.getElementById(id);
+                if(el) {
+                    el.innerHTML = '<option value="all">全部房间</option>';
+                    roomsToShow.forEach(r => {
+                        const opt = document.createElement('option');
+                        opt.value = r;
+                        opt.textContent = r;
+                        el.appendChild(opt);
+                    });
+                }
+            });
+        }
         document.addEventListener('click', (e) => {
             if (!btnAccount.contains(e.target) && !menuAccount.contains(e.target)) {
                 menuAccount.classList.add('hidden');
@@ -267,40 +395,7 @@ loadUserFamilies(user);
             sendPasswordResetEmail(auth, e).then(() => { alert("已发送"); document.getElementById('modal-forgot').classList.add('hidden'); }).catch(err => alert(err.message));
         });
 
-        // --- Data Logic ---
-        function setupDataListener(uid) {
-            if(unsubscribeItems) unsubscribeItems();
-            const q = query(itemsRef, where("uid", "==", uid));
-            unsubscribeItems = onSnapshot(q, snap => {
-                let isFirstLoad = allItems.length === 0;
-                snap.docChanges().forEach(change => {
-                    const data = { id: change.doc.id, ...change.doc.data() };
-                    if (!data.category) data.category = '其他杂项';
-                    if (!data.tags) data.tags = [];
-
-                    if (change.type === "added") {
-                        if (isFirstLoad) allItems.push(data); else allItems.unshift(data); 
-                    }
-                    if (change.type === "modified") {
-                        const idx = allItems.findIndex(i => i.id === data.id);
-                        if (idx > -1) allItems[idx] = data;
-                    }
-                    if (change.type === "removed") {
-                        allItems = allItems.filter(i => i.id !== data.id);
-                    }
-                });
-                
-                allItems.sort((a, b) => {
-                    const timeA = a.updatedAt ? a.updatedAt.toMillis() : Date.now() + 10000;
-                    const timeB = b.updatedAt ? b.updatedAt.toMillis() : Date.now() + 10000;
-                    return timeB - timeA;
-                });
-                
-                if (currentScreen === 'home') refreshHomeList();
-                if (currentScreen === 'takeout') refreshTakeoutList();
-                if (currentScreen === 'results') refreshResultsList();
-            });
-        }
+function refreshHomeList() {
 
         // --- List Renderers ---
         function refreshHomeList() { 
@@ -653,16 +748,18 @@ let unsubscribeProfile = null;
 // 更新设置页面的UI
                 if (currentScreen === 'settings') renderProfileUI();
                 
-                // 强制更新主页顶部账户按钮的读屏标签和文字
+
+// 强制更新主页顶部账户按钮的读屏标签和文字
                 const topBtn = document.getElementById('btn-account-menu');
                 const topText = document.getElementById('user-email-display');
                 if (topBtn && topText) {
                     const finalNick = userProfile.nickname || user.email.split('@')[0];
+                    const familyName = currentAppFamily ? currentAppFamily.name : '未设置家庭';
                     topText.textContent = finalNick;
-                    // 按照要求的格式设置 aria-label
-                    topBtn.setAttribute('aria-label', `当前账号：${finalNick}，${user.email}，点击展开菜单`);
+                    // 按照要求的格式设置 aria-label，增加家庭信息
+                    topBtn.setAttribute('aria-label', `当前账号：${finalNick}，${user.email}，家庭：${familyName}，点击展开菜单`);
                 }
-            });
+                }
         }
 
 function renderProfileUI() {
@@ -782,12 +879,39 @@ function renderProfileUI() {
         function loadUserFamilies(user) {
             if (unsubscribeFamilies) unsubscribeFamilies();
             // 查询当前用户创建的家庭
-            const q = query(familiesRef, where("uid", "==", user.uid));
-            unsubscribeFamilies = onSnapshot(q, (snapshot) => {
+unsubscribeFamilies = onSnapshot(q, (snapshot) => {
                 userFamilies = [];
                 snapshot.forEach(doc => {
                     userFamilies.push({ id: doc.id, ...doc.data() });
                 });
+                
+                // --- 核心初始化逻辑 ---
+                const lastUsedId = localStorage.getItem('last_family_id');
+                let targetFamily = null;
+
+                if (userFamilies.length > 0) {
+                    // 尝试使用上次使用的家庭ID
+                    if (lastUsedId) {
+                        targetFamily = userFamilies.find(f => f.id === lastUsedId);
+                    }
+                    // 如果找不到上次使用的，或者上次没用过，则默认选择第一个
+                    if (!targetFamily) {
+                        targetFamily = userFamilies[0];
+                    }
+                }
+
+                // 只有在家庭ID发生变化时才执行切换
+                if (!currentAppFamily || currentAppFamily.id !== (targetFamily ? targetFamily.id : null)) {
+                    if (targetFamily) {
+                        switchAppFamily(targetFamily); 
+                    } else {
+                        // 如果用户删光了家庭，清空数据
+                        currentAppFamily = null;
+                        if (unsubscribeItems) unsubscribeItems();
+                        allItems = [];
+                        refreshHomeList();
+                    }
+                }
                 renderFamilyOptions();
             });
         }
@@ -1271,7 +1395,12 @@ safeListen('room-family-select', 'change', async (e) => {
         safeListen('form-add', 'submit', async (e) => {
             e.preventDefault();
             const name = document.getElementById('add-name').value.trim();
-            if(!name) return;
+if(!name) return;
+            if(!currentAppFamily) { announce("请先在设置中创建一个家庭"); return; } 
+            
+            // 学习新的单位
+            learnNewUnit(document.getElementById('add-unit').value);
+
             try {
                 await addDoc(itemsRef, {
                     name: name,
@@ -1281,6 +1410,7 @@ safeListen('room-family-select', 'change', async (e) => {
                     room: document.getElementById('add-room').value,
                     location: document.getElementById('add-location').value,
                     quantity: pendingAddQty,
+                    familyId: currentAppFamily.id, // 新增：家庭ID
                     uid: auth.currentUser.uid,
                     updatedAt: serverTimestamp()
                 });
