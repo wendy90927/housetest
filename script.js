@@ -1001,40 +1001,54 @@ rooms: ["客厅", "厨房", "卧室", "餐厅", "卫生间"],
         document.getElementById('btn-fam-cancel').addEventListener('click', () => toggleFamilyForm(false));
 
 // ==========================================
-        // 全局事件委托：处理菜单交互与删除逻辑 (最终稳定版)
+        // 全局事件委托：处理菜单交互与删除逻辑 (增强修复版)
         // ==========================================
 
         // 1. 处理全局点击 (删除按钮 & 菜单触发)
         document.addEventListener('click', (e) => {
-            // --- 逻辑 A: 删除家庭按钮 ---
+            // A. 删除家庭按钮逻辑
             const delBtn = e.target.closest('#btn-fam-del');
             if (delBtn) {
+                e.preventDefault();
                 e.stopPropagation();
-                if (!currentFamilyId) { announce("未选中家庭"); return; }
+                
+                if (!currentFamilyId) { 
+                    announce("操作无效：未选中任何家庭"); 
+                    return; 
+                }
+                
                 const fam = userFamilies.find(f => f.id === currentFamilyId);
-                if (!fam) { announce("数据错误"); return; }
+                if (!fam) { 
+                    announce("错误：找不到当前家庭数据"); 
+                    return; 
+                }
 
-                openGenericConfirm(`高危操作：确定删除“${fam.name}”吗？\n删除后，该家庭内的物品将不可见。`, async () => {
+                openGenericConfirm(`高危操作：确定删除“${fam.name}”吗？\n删除后，该家庭将被永久移除。`, async () => {
                     try {
                         await deleteDoc(doc(db, "families", currentFamilyId));
-                        announce(`已删除：${fam.name}`);
+                        announce(`已成功删除：${fam.name}`);
+                        
+                        // 重置状态
                         localStorage.removeItem('last_family_id');
                         currentFamilyId = null;
+                        
                         closeModals();
-                        // 尝试聚焦
+                        
+                        // 焦点处理：尝试回到下拉框
                         setTimeout(() => {
-                           const select = document.getElementById('manage-family-select');
-                           if(select) select.focus();
+                            const select = document.getElementById('manage-family-select');
+                            if(select) select.focus();
                         }, 100);
+                        
                     } catch(err) {
-                        console.error(err);
-                        announce("删除失败");
+                        console.error("删除失败:", err);
+                        announce("删除失败，请检查网络");
                     }
                 });
                 return;
             }
 
-            // --- 逻辑 B: 切换家庭菜单触发器 ---
+            // B. 切换家庭菜单触发器
             const switchBtn = e.target.closest('#btn-switch-family-trigger');
             if (switchBtn) {
                 e.stopPropagation();
@@ -1042,10 +1056,13 @@ rooms: ["客厅", "厨房", "卧室", "餐厅", "卫生间"],
             }
         });
 
-        // 2. 处理全局键盘导航 (菜单触发器的右光标)
+        // 2. 处理全局键盘导航 (菜单触发器)
         document.addEventListener('keydown', (e) => {
-            // 只关心切换家庭按钮上的按键
-            if (e.target.id === 'btn-switch-family-trigger') {
+            // 使用 closest 修复：防止光标落在 span 上导致判断失败
+            const triggerBtn = e.target.closest('#btn-switch-family-trigger');
+            
+            if (triggerBtn) {
+                // 右光标：展开菜单
                 if (e.key === 'ArrowRight') {
                     e.preventDefault();
                     e.stopPropagation();
@@ -1055,7 +1072,14 @@ rooms: ["客厅", "厨房", "卧室", "餐厅", "卫生间"],
                         announce("暂无其他家庭");
                     }
                 }
-                // 左光标不处理，保持默认
+                // 下光标：也允许展开 (符合通用菜单习惯)
+                else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (userFamilies.length > 0) {
+                        openFamilySubmenu();
+                    }
+                }
             }
         });
 
@@ -1663,10 +1687,10 @@ function renderFamilySwitcher() {
             const container = document.getElementById('submenu-family-list');
             if(!container) return;
             
-            // 清空列表
+            // 1. 清空列表
             container.innerHTML = '';
             
-            // 填充家庭列表
+            // 2. 填充家庭列表
             userFamilies.forEach((fam) => {
                 const item = document.createElement('button');
                 item.className = "w-full text-left px-4 py-3 hover:bg-blue-50 font-bold border-b border-gray-100 focus:bg-blue-100 focus:text-blue-900 focus:outline-none";
@@ -1680,7 +1704,7 @@ function renderFamilySwitcher() {
                 item.setAttribute('role', 'menuitem');
                 item.setAttribute('tabindex', '-1'); 
 
-                // 列表项是动态生成的，必须在这里绑定事件
+                // 列表项内部的事件保持不变
                 item.addEventListener('click', (e) => {
                     e.stopPropagation();
                     switchFamily(fam.id);
@@ -1711,12 +1735,12 @@ function renderFamilySwitcher() {
                 container.appendChild(item);
             });
             
-            // 确保触发按钮有正确的 ARIA 属性
+            // 3. 确保触发按钮有正确的角色 (不再绑定事件，全靠全局委托)
             const triggerBtn = document.getElementById('btn-switch-family-trigger');
             if(triggerBtn) {
                 triggerBtn.setAttribute('role', 'menuitem');
                 triggerBtn.setAttribute('aria-haspopup', 'menu');
-                // 注意：这里不再绑定任何事件，事件全部交给下面的全局委托处理
+                triggerBtn.setAttribute('aria-expanded', 'false');
             }
         }
 
