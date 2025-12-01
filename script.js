@@ -966,45 +966,43 @@ function loadUserFamilies(user) {
         });
 
         // 按钮：删除家庭 (直接绑定版)
-        const btnFamDel = document.getElementById('btn-fam-del');
-        if (btnFamDel) {
-            btnFamDel.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
+safeListen('btn-fam-del', 'click', (e) => {
+            // 阻止可能的冒泡，确保只触发一次
+            e.preventDefault();
+            e.stopPropagation();
 
-                if (!currentFamilyId) { 
-                    announce("操作无效：未选中任何家庭"); 
-                    return; 
-                }
-                
-                const fam = userFamilies.find(f => f.id === currentFamilyId);
-                if (!fam) { 
-                    announce("数据同步错误，请刷新页面"); 
-                    return; 
-                }
+            if (!currentFamilyId) { 
+                announce("操作无效：未选中任何家庭"); 
+                return; 
+            }
+            
+            const fam = userFamilies.find(f => f.id === currentFamilyId);
+            if (!fam) { 
+                announce("数据同步错误，请刷新页面"); 
+                return; 
+            }
 
-                openGenericConfirm(`高危操作：确定删除家庭“${fam.name}”吗？\n删除后，该家庭将被永久移除，且无法恢复。`, async () => {
-                    try {
-                        await deleteDoc(doc(db, "families", currentFamilyId));
-                        announce(`已成功删除：${fam.name}`);
-                        
-                        // 清理状态
-                        localStorage.removeItem('last_family_id');
-                        currentFamilyId = null;
-                        
-                        closeModals();
-                        
-                        // 强制聚焦到下拉框
-                        const select = document.getElementById('manage-family-select');
-                        if(select) select.focus();
-                        
-                    } catch(err) {
-                        console.error("删除失败:", err);
-                        announce("删除失败，请检查网络");
-                    }
-                });
+            openGenericConfirm(`高危操作：确定删除家庭“${fam.name}”吗？\n删除后，该家庭将被永久移除，且无法恢复。`, async () => {
+                try {
+                    await deleteDoc(doc(db, "families", currentFamilyId));
+                    announce(`已成功删除：${fam.name}`);
+                    
+                    // 清理状态
+                    localStorage.removeItem('last_family_id');
+                    currentFamilyId = null;
+                    
+                    closeModals();
+                    
+                    // 强制聚焦到下拉框，避免焦点丢失
+                    const select = document.getElementById('manage-family-select');
+                    if(select) select.focus();
+                    
+                } catch(err) {
+                    console.error("删除失败:", err);
+                    announce("删除失败，请检查网络");
+                }
             });
-        }
+        });
 
         // 按钮：保存家庭 (新增或更新)
         document.getElementById('btn-fam-save').addEventListener('click', async () => {
@@ -1056,12 +1054,12 @@ rooms: ["客厅", "厨房", "卧室", "餐厅", "卫生间"],
         });
 
 // 2. 处理全局键盘导航 (菜单触发器)
-        document.addEventListener('keydown', (e) => {
+document.addEventListener('keydown', (e) => {
             const triggerBtn = e.target.closest('#btn-switch-family-trigger');
             
             if (triggerBtn) {
-                // 仅保留右光标展开，下光标交还给浏览器处理
                 if (e.key === 'ArrowRight') {
+                    // 右光标：展开子菜单
                     e.preventDefault();
                     e.stopPropagation();
                     if (userFamilies.length > 0) {
@@ -1069,6 +1067,14 @@ rooms: ["客厅", "厨房", "卧室", "餐厅", "卫生间"],
                     } else {
                         announce("暂无其他家庭");
                     }
+                } else if (e.key === 'ArrowDown') {
+                    // 下光标：拦截默认行为，强制跳过子菜单，聚焦下一个主菜单项
+                    e.preventDefault(); 
+                    e.stopPropagation();
+                    closeFamilySubmenu(); 
+                    
+                    const nextBtn = document.getElementById('btn-open-settings');
+                    if (nextBtn) nextBtn.focus();
                 }
             }
         });
