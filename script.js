@@ -965,9 +965,12 @@ function loadUserFamilies(user) {
             }
         });
 
-        // 按钮：删除家庭 (直接绑定版)
-safeListen('btn-fam-del', 'click', (e) => {
-            // 阻止可能的冒泡，确保只触发一次
+// 改用全局委托监听，确保无论 Tab 如何切换，点击事件都有效
+        document.addEventListener('click', (e) => {
+            const btnDel = e.target.closest('#btn-fam-del');
+            if (!btnDel) return;
+
+            // 阻止冒泡
             e.preventDefault();
             e.stopPropagation();
 
@@ -1068,13 +1071,21 @@ document.addEventListener('keydown', (e) => {
                         announce("暂无其他家庭");
                     }
                 } else if (e.key === 'ArrowDown') {
-                    // 下光标：拦截默认行为，强制跳过子菜单，聚焦下一个主菜单项
+                    // 下光标：拦截默认行为，强制聚焦到下一个主菜单项 (账户与家庭管理)
                     e.preventDefault(); 
                     e.stopPropagation();
                     closeFamilySubmenu(); 
                     
                     const nextBtn = document.getElementById('btn-open-settings');
                     if (nextBtn) nextBtn.focus();
+                } else if (e.key === 'ArrowUp') {
+                    // 上光标 (新增)：循环跳转到菜单最底部的按钮 (退出登录)
+                    e.preventDefault(); 
+                    e.stopPropagation();
+                    closeFamilySubmenu(); 
+                    
+                    const lastBtn = document.getElementById('btn-logout');
+                    if (lastBtn) lastBtn.focus();
                 }
             }
         });
