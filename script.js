@@ -798,10 +798,10 @@ function loadUserFamilies(user) {
                     userFamilies.push({ id: doc.id, ...doc.data() });
                 });
 
-                // --- 核心逻辑：自动创建“默认家庭”并迁移旧数据 ---
+                // 如果完全没有家庭，才自动创建
                 if (userFamilies.length === 0) {
                     try {
-                        const docRef = await addDoc(familiesRef, {
+                        await addDoc(familiesRef, {
                             name: "默认家庭",
                             location: "我的家",
                             rooms: ["客厅", "厨房", "卧室", "餐厅", "卫生间"],
@@ -809,36 +809,37 @@ function loadUserFamilies(user) {
                             createdAt: serverTimestamp()
                         });
                         announce("已自动创建：默认家庭");
-                        // 这里的逻辑会自动触发快照更新，无需手动重载
-                    } catch (e) { console.error("自动创建家庭失败", e); }
-                } else {
-                    // 读取本地存储的上次选择
-                    const savedFamId = localStorage.getItem('last_family_id');
-                    const exists = userFamilies.find(f => f.id === savedFamId);
-                    
-                    if (exists) {
-                        currentFamilyId = savedFamId;
-                    } else {
-                        // 默认选中第一个
-                        currentFamilyId = userFamilies[0].id;
-                        localStorage.setItem('last_family_id', currentFamilyId);
-                    }
-                    
-                    // 执行旧数据迁移
-                    migrateOrphanItems(currentFamilyId);
-
-                    // 刷新界面状态
-                    updateTopBarAccountInfo();
-                    renderFamilyOptions(); 
-                    
-                    // 注意：renderFamilySwitcher 函数将在后续步骤中添加，如果现在报错请忽略
-                    if (typeof renderFamilySwitcher === 'function') {
-                        renderFamilySwitcher(); 
-                    }
-                    
-                    // 重新加载物品数据
-                    setupDataListener(user.uid);
+                        return; // 等待下一次快照更新
+                    } catch (e) { console.error("自动创建失败", e); }
                 }
+
+                // --- 逻辑修正：无论是否已有家庭，都进行状态恢复 ---
+                const savedFamId = localStorage.getItem('last_family_id');
+                const exists = userFamilies.find(f => f.id === savedFamId);
+                
+                if (exists) {
+                    currentFamilyId = savedFamId;
+                } else {
+                    // 如果之前的家庭被删了，或者没有记录，默认选第一个
+                    currentFamilyId = userFamilies[0].id;
+                    localStorage.setItem('last_family_id', currentFamilyId);
+                }
+                
+                // --- 强制检查迁移：将无家可归的物品归入当前家庭 ---
+                // 这样你的旧数据就会立刻显示在当前选中的家庭里
+                migrateOrphanItems(currentFamilyId);
+
+                // 刷新所有界面状态
+                updateTopBarAccountInfo();
+                renderFamilyOptions(); 
+                
+                // 确保菜单逻辑已加载
+                if (typeof renderFamilySwitcher === 'function') {
+                    renderFamilySwitcher(); 
+                }
+                
+                // 重新加载物品数据
+                setupDataListener(user.uid);
             });
         }
 
@@ -999,22 +1000,36 @@ rooms: ["客厅", "厨房", "卧室", "餐厅", "卫生间"],
         // 按钮：取消
         document.getElementById('btn-fam-cancel').addEventListener('click', () => toggleFamilyForm(false));
 
-        // 按钮：删除家庭
-        document.getElementById('btn-fam-del').addEventListener('click', () => {
-            if (!currentFamilyId) return;
-            const fam = userFamilies.find(f => f.id === currentFamilyId);
-            openGenericConfirm(`确定删除家庭“${fam.name}”吗？这不会删除里面的物品。`, async () => {
-                try {
-                    await deleteDoc(doc(db, "families", currentFamilyId));
-                    announce("家庭已删除");
-document.getElementById('manage-family-select').focus();
-                    closeModals(); // 关闭确认弹窗
-                    // 逻辑上需要重置选中状态，loadUserFamilies 会自动处理
-                } catch(e) {
-                    announce("删除失败");
-                }
+// 按钮：删除家庭
+        const btnFamDel = document.getElementById('btn-fam-del');
+        if (btnFamDel) {
+            btnFamDel.addEventListener('click', () => {
+                if (!currentFamilyId) { announce("没有选中的家庭"); return; }
+                
+                const fam = userFamilies.find(f => f.id === currentFamilyId);
+                // 防止删除空对象报错
+                if (!fam) { announce("家庭数据错误，请刷新"); return; }
+
+                openGenericConfirm(`确定删除家庭“${fam.name}”吗？注意：这不会删除里面的物品，物品将变为无归属状态。`, async () => {
+                    try {
+                        await deleteDoc(doc(db, "families", currentFamilyId));
+                        announce("家庭已删除");
+                        
+                        // 删除后，重置 currentFamilyId，让 snapshot 监听器自动处理下一个选中项
+                        localStorage.removeItem('last_family_id');
+                        currentFamilyId = null; 
+                        
+                        closeModals(); 
+                        // 焦点回到下拉框
+                        const select = document.getElementById('manage-family-select');
+                        if(select) select.focus();
+                    } catch(e) {
+                        console.error(e);
+                        announce("删除失败");
+                    }
+                });
             });
-        });
+        }
 
 // 安全监听辅助函数 (防止因找不到元素导致脚本中断)
         function safeListen(id, event, handler) {
