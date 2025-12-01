@@ -1642,23 +1642,25 @@ familyId: currentFamilyId,
 // --- 家庭切换菜单逻辑 ---
 function renderFamilySwitcher() {
             const container = document.getElementById('submenu-family-list');
-            // 注意：这里我们获取原始按钮
             const oldBtn = document.getElementById('btn-switch-family-trigger');
             
             if(!container || !oldBtn) return;
             
-            // --- 核心修复：克隆按钮以清除所有旧事件 ---
+            // 克隆节点以重置事件，防止重复绑定
             const newBtn = oldBtn.cloneNode(true);
             oldBtn.parentNode.replaceChild(newBtn, oldBtn);
 
-            // 清空列表容器
+            // --- 关键修复：强制修改 ARIA 角色 ---
+            // 将 button 角色改为 menuitem，读屏软件会朗读“菜单项”，并允许光标键穿透
+            newBtn.setAttribute('role', 'menuitem'); 
+            newBtn.setAttribute('aria-haspopup', 'menu'); // 明确告知有子菜单
+            
+            // 清空并重建列表
             container.innerHTML = '';
             
-            // 填充家庭列表
             userFamilies.forEach((fam) => {
                 const item = document.createElement('button');
-                // 保持样式不变
-                item.className = "w-full text-left px-4 py-3 hover:bg-blue-50 font-bold border-b border-gray-100 focus:bg-blue-100 focus:text-blue-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500";
+                item.className = "w-full text-left px-4 py-3 hover:bg-blue-50 font-bold border-b border-gray-100 focus:bg-blue-100 focus:text-blue-900 focus:outline-none";
                 item.textContent = fam.name;
                 
                 if(fam.id === currentFamilyId) {
@@ -1669,13 +1671,11 @@ function renderFamilySwitcher() {
                 item.setAttribute('role', 'menuitem');
                 item.setAttribute('tabindex', '-1'); 
 
-                // 列表项点击
                 item.addEventListener('click', (e) => {
                     e.stopPropagation();
                     switchFamily(fam.id);
                 });
 
-                // 列表项键盘导航
                 item.addEventListener('keydown', (e) => {
                     e.stopPropagation(); 
                     if (e.key === 'ArrowDown') {
@@ -1687,8 +1687,9 @@ function renderFamilySwitcher() {
                         const prev = item.previousElementSibling || container.lastElementChild;
                         if(prev) prev.focus();
                     } else if (e.key === 'ArrowLeft') {
+                        // 左光标：收起子菜单，焦点回到父级菜单项
                         e.preventDefault();
-                        closeFamilySubmenu(); // 左光标：收起并回退焦点
+                        closeFamilySubmenu();
                     } else if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
                         switchFamily(fam.id);
@@ -1701,17 +1702,17 @@ function renderFamilySwitcher() {
                 container.appendChild(item);
             });
 
-            // --- 绑定主按钮事件 (修复右光标) ---
+            // --- 绑定主触发器的交互 ---
             
-            // 1. 点击事件
+            // 点击展开/收起
             newBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 toggleFamilySubmenu();
             });
             
-            // 2. 键盘事件
+            // 键盘事件
             newBtn.addEventListener('keydown', (e) => {
-                // 必须阻止冒泡，防止被全局监听器捕获
+                // 阻止事件冒泡，防止被读屏软件拦截
                 e.stopPropagation(); 
                 
                 if (e.key === 'ArrowRight') {
@@ -1719,11 +1720,10 @@ function renderFamilySwitcher() {
                     if (userFamilies.length > 0) {
                         openFamilySubmenu();
                     } else {
-                        announce("没有可切换的家庭");
+                        announce("暂无其他家庭");
                     }
                 } else if (e.key === 'ArrowLeft') {
-                    // 左光标在此处通常无操作，或可设计为关闭整个账户菜单（可选）
-                    // 这里保持静默，防止误触
+                    // 左光标：不做操作，防止误触关闭外层
                 }
             });
         }
