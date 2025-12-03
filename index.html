@@ -372,8 +372,7 @@
 
         <div class="bg-white border-b border-gray-200">
             <div class="max-w-3xl mx-auto flex" role="tablist" aria-label="设置选项卡">
-                <button id="tab-profile" role="tab" aria-selected="true" aria-controls="panel-profile" class="flex-1 py-4 text-blue-800 border-b-4 border-blue-800 font-bold text-lg focus:outline-none focus:bg-blue-50">个人资料</button>
-                <button id="tab-family" role="tab" aria-selected="false" aria-controls="panel-family" class="flex-1 py-4 text-gray-600 font-bold text-lg hover:bg-gray-50 focus:outline-none focus:bg-gray-100">家庭管理</button>
+<button id="tab-profile" role="tab" aria-selected="true" aria-controls="panel-profile" class="flex-1 py-4 text-blue-800 border-b-4 border-blue-800 font-bold text-lg focus:outline-none focus:bg-blue-50">个人资料</button>
                 <button id="tab-rooms" role="tab" aria-selected="false" aria-controls="panel-rooms" class="flex-1 py-4 text-gray-600 font-bold text-lg hover:bg-gray-50 focus:outline-none focus:bg-gray-100">房间管理</button>
             </div>
         </div>
@@ -419,41 +418,10 @@
                 </div>
             </div>
 
-            <div id="panel-family" role="tabpanel" tabindex="0" aria-labelledby="tab-family" class="hidden">
-                <div class="bg-white p-6 rounded-lg shadow space-y-6">
-                    <div>
-                        <label for="manage-family-select" class="block font-bold mb-2 text-lg">当前管理的家庭</label>
-                        <select id="manage-family-select" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg bg-white"></select>
-                    </div>
-                    <div class="flex gap-3">
-                        <button id="btn-fam-new" class="flex-1 py-3 bg-green-100 text-green-900 border-2 border-green-300 rounded-lg font-bold">新建家庭</button>
-                        <button id="btn-fam-edit" class="flex-1 py-3 bg-yellow-100 text-yellow-900 border-2 border-yellow-300 rounded-lg font-bold">编辑信息</button>
-                        <button id="btn-fam-del" class="flex-1 py-3 bg-red-100 text-red-900 border-2 border-red-300 rounded-lg font-bold">删除当前</button>
-                    </div>
-                    
-                    <div id="box-family-form" class="hidden border-2 border-blue-200 bg-blue-50 p-4 rounded-lg mt-4">
-                        <h3 id="title-family-form" class="font-bold text-lg mb-4 text-blue-900">新建/编辑家庭</h3>
-                        <label for="input-fam-name" class="block font-bold mb-2">家庭名称</label>
-                        <input type="text" id="input-fam-name" class="w-full p-3 border border-blue-300 rounded mb-4 bg-white">
-                        <label for="input-fam-loc" class="block font-bold mb-2">位置/备注</label>
-                        <input type="text" id="input-fam-loc" class="w-full p-3 border border-blue-300 rounded mb-4 bg-white">
-                        <div class="flex gap-3">
-                            <button id="btn-fam-save" class="flex-1 bg-blue-600 text-white py-3 rounded font-bold">保存</button>
-                            <button id="btn-fam-cancel" class="flex-1 bg-gray-300 text-gray-800 py-3 rounded font-bold">取消</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
 <div id="panel-rooms" role="tabpanel" tabindex="0" aria-labelledby="tab-rooms" class="hidden">
                 <div class="bg-white p-6 rounded-lg shadow space-y-6">
-                    <div>
-                        <label for="room-family-select" class="block font-bold mb-4 text-xl">请选择要管理的家庭</label>
-                        <select id="room-family-select" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl bg-white"></select>
-                    </div>
+                    <p class="text-gray-600 font-bold text-lg">在此管理您的房间列表（支持自定义添加和删除）。</p>
                     
-                    <hr class="border-gray-200">
-
                     <div class="flex flex-col gap-4">
                         <button id="btn-to-room-add" class="w-full py-6 bg-blue-50 text-blue-900 border-2 border-blue-300 rounded-xl font-bold text-2xl shadow-sm hover:bg-blue-100 flex items-center justify-center gap-2">
                             <span>+ 新增房间</span>

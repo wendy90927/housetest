@@ -563,69 +563,35 @@ loadUserFamilies(user);
         document.getElementById('btn-back-settings').addEventListener('click', () => switchScreen('screen-home'));
 
 function switchSettingsTab(tabId) {
-            ['profile', 'family', 'rooms'].forEach(k => {
-                const pid = `panel-${k}`;
-                const bid = `tab-${k}`;
-                document.getElementById(pid).classList.add('hidden');
-                const btn = document.getElementById(bid);
-                btn.setAttribute('aria-selected', 'false');
-                btn.setAttribute('tabindex', '-1'); 
-                btn.classList.remove('border-b-4', 'border-blue-800', 'text-blue-800');
-                btn.classList.add('text-gray-600');
-            });
+            // 隐藏所有面板
+            document.getElementById('panel-profile').classList.add('hidden');
+            document.getElementById('panel-rooms').classList.add('hidden');
             
+            // 重置按钮状态
+            ['tab-profile', 'tab-rooms'].forEach(id => {
+                const btn = document.getElementById(id);
+                if(btn) {
+                    btn.setAttribute('aria-selected', 'false');
+                    btn.setAttribute('tabindex', '-1');
+                    btn.classList.remove('border-b-4', 'border-blue-800', 'text-blue-800');
+                    btn.classList.add('text-gray-600');
+                }
+            });
+
+            // 显示目标面板
             const key = tabId.replace('tab-', '');
-            document.getElementById(`panel-${key}`).classList.remove('hidden');
+            const panel = document.getElementById(`panel-${key}`);
+            if (panel) panel.classList.remove('hidden');
+
+            // 激活目标按钮
             const activeBtn = document.getElementById(tabId);
-            activeBtn.setAttribute('aria-selected', 'true');
-            activeBtn.setAttribute('tabindex', '0'); 
-            activeBtn.classList.add('border-b-4', 'border-blue-800', 'text-blue-800');
-            activeBtn.classList.remove('text-gray-600');
+            if (activeBtn) {
+                activeBtn.setAttribute('aria-selected', 'true');
+                activeBtn.setAttribute('tabindex', '0');
+                activeBtn.classList.add('border-b-4', 'border-blue-800', 'text-blue-800');
+                activeBtn.classList.remove('text-gray-600');
+            }
         }
-
-const tabIds = ['tab-profile', 'tab-family', 'tab-rooms'];
-        
-        // 绑定键盘事件
-        tabIds.forEach((id, index) => {
-            const el = document.getElementById(id);
-            if(!el) return;
-
-            // 初始化TabIndex
-            el.setAttribute('tabindex', index === 0 ? '0' : '-1');
-
-            el.addEventListener('click', () => {
-                switchSettingsTab(id);
-                el.focus(); 
-            });
-
-            el.addEventListener('keydown', (e) => {
-                let newIndex = -1;
-                // 只处理左右方向键
-                if (e.key === 'ArrowRight') {
-                    newIndex = (index + 1) % tabIds.length;
-                } else if (e.key === 'ArrowLeft') {
-                    newIndex = (index - 1 + tabIds.length) % tabIds.length;
-                }
-                
-                if (newIndex !== -1) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const targetId = tabIds[newIndex];
-                    const targetEl = document.getElementById(targetId);
-                    
-                    // 重置所有tab的焦点状态
-                    tabIds.forEach(tid => {
-                        const t = document.getElementById(tid);
-                        if(t) t.setAttribute('tabindex', '-1');
-                    });
-                    
-                    // 激活目标tab
-                    targetEl.setAttribute('tabindex', '0');
-                    targetEl.focus();
-                    targetEl.click();
-                }
-            });
-        });
 
 let unsubscribeProfile = null;
 
@@ -781,150 +747,34 @@ function renderProfileUI() {
 
         function loadUserFamilies(user) {
             if (unsubscribeFamilies) unsubscribeFamilies();
-            // 查询当前用户创建的家庭
+            // 监听用户的家庭数据
             const q = query(familiesRef, where("uid", "==", user.uid));
-            unsubscribeFamilies = onSnapshot(q, (snapshot) => {
-                userFamilies = [];
-                snapshot.forEach(doc => {
-                    userFamilies.push({ id: doc.id, ...doc.data() });
-                });
-                renderFamilyOptions();
-            });
-        }
-
-        function renderFamilyOptions() {
-            // 同时更新“家庭管理”和“房间管理”两个面板的下拉框
-            const selects = ['manage-family-select', 'room-family-select'];
             
-            selects.forEach(id => {
-                const el = document.getElementById(id);
-                if(!el) return;
-                const savedVal = el.value || currentFamilyId;
-                el.innerHTML = '';
-                
-                if (userFamilies.length === 0) {
-                    const opt = document.createElement('option');
-                    opt.textContent = "暂无家庭，请新建";
-                    el.appendChild(opt);
-                    el.disabled = true;
-                } else {
-                    el.disabled = false;
-                    userFamilies.forEach(fam => {
-                        const opt = document.createElement('option');
-                        opt.value = fam.id;
-                        opt.textContent = fam.name;
-                        el.appendChild(opt);
-                    });
-                    
-                    // 尝试保持选中状态
-                    if (savedVal && userFamilies.find(f => f.id === savedVal)) {
-                        el.value = savedVal;
-                    } else {
-                        el.value = userFamilies[0].id;
+            unsubscribeFamilies = onSnapshot(q, async (snapshot) => {
+                if (snapshot.empty) {
+                    // 如果没有家庭，自动创建一个“我的家”
+                    try {
+                        const docRef = await addDoc(familiesRef, {
+                            name: "我的家",
+                            location: "默认",
+                            rooms: ["客厅", "厨房", "卧室", "餐厅", "卫生间"],
+                            uid: user.uid,
+                            createdAt: serverTimestamp()
+                        });
+                        currentFamilyId = docRef.id;
+                        currentFamilyRooms = ["客厅", "厨房", "卧室", "餐厅", "卫生间"];
+                        console.log("已自动初始化家庭");
+                    } catch (e) {
+                        console.error("自动创建家庭失败", e);
                     }
-                }
-            });
-
-            // 更新当前选中的ID全局变量
-            const activeSelect = document.getElementById('manage-family-select');
-            if (activeSelect && !activeSelect.disabled) {
-                currentFamilyId = activeSelect.value;
-            } else {
-                currentFamilyId = null;
-            }
-        }
-
-        // 下拉框变化时同步 ID
-        document.getElementById('manage-family-select').addEventListener('change', (e) => {
-            currentFamilyId = e.target.value;
-            // 同步到房间管理的下拉框
-            document.getElementById('room-family-select').value = currentFamilyId;
-        });
-
-        // UI 辅助：显示/隐藏表单
-        function toggleFamilyForm(show, mode = 'new') {
-            const box = document.getElementById('box-family-form');
-            if (show) {
-                box.classList.remove('hidden');
-                document.getElementById('title-family-form').textContent = mode === 'new' ? "新建家庭" : "编辑家庭";
-                document.getElementById('input-fam-name').focus();
-            } else {
-                box.classList.add('hidden');
-                document.getElementById('btn-fam-new').focus(); // 焦点归位
-            }
-        }
-
-        // 按钮：新建家庭
-        document.getElementById('btn-fam-new').addEventListener('click', () => {
-            isEditingFamily = false;
-            document.getElementById('input-fam-name').value = '';
-            document.getElementById('input-fam-loc').value = '';
-            toggleFamilyForm(true, 'new');
-        });
-
-        // 按钮：编辑家庭
-        document.getElementById('btn-fam-edit').addEventListener('click', () => {
-            if (!currentFamilyId) { announce("没有可编辑的家庭"); return; }
-            const fam = userFamilies.find(f => f.id === currentFamilyId);
-            if (fam) {
-                isEditingFamily = true;
-                document.getElementById('input-fam-name').value = fam.name;
-                document.getElementById('input-fam-loc').value = fam.location || '';
-                toggleFamilyForm(true, 'edit');
-            }
-        });
-
-        // 按钮：保存家庭 (新增或更新)
-        document.getElementById('btn-fam-save').addEventListener('click', async () => {
-            const name = document.getElementById('input-fam-name').value.trim();
-            const loc = document.getElementById('input-fam-loc').value.trim();
-            if (!name) { announce("家庭名称不能为空"); return; }
-
-            try {
-                if (isEditingFamily && currentFamilyId) {
-                    await updateDoc(doc(db, "families", currentFamilyId), {
-                        name: name,
-                        location: loc,
-                        updatedAt: serverTimestamp()
-                    });
-                    announce("家庭信息已更新");
                 } else {
-const docRef = await addDoc(familiesRef, {
-                        name: name,
-                        location: loc,
-rooms: ["客厅", "厨房", "卧室", "餐厅", "卫生间"],
-                        uid: auth.currentUser.uid,
-                        createdAt: serverTimestamp()
-                    });
-                    currentFamilyId = docRef.id; // 选中新家庭
-                    announce("新家庭已创建");
-                }
-                toggleFamilyForm(false);
-            } catch (e) {
-                console.error(e);
-                announce("保存失败");
-            }
-        });
-
-        // 按钮：取消
-        document.getElementById('btn-fam-cancel').addEventListener('click', () => toggleFamilyForm(false));
-
-        // 按钮：删除家庭
-        document.getElementById('btn-fam-del').addEventListener('click', () => {
-            if (!currentFamilyId) return;
-            const fam = userFamilies.find(f => f.id === currentFamilyId);
-            openGenericConfirm(`确定删除家庭“${fam.name}”吗？这不会删除里面的物品。`, async () => {
-                try {
-                    await deleteDoc(doc(db, "families", currentFamilyId));
-                    announce("家庭已删除");
-document.getElementById('manage-family-select').focus();
-                    closeModals(); // 关闭确认弹窗
-                    // 逻辑上需要重置选中状态，loadUserFamilies 会自动处理
-                } catch(e) {
-                    announce("删除失败");
+                    // 只要有家庭，就自动锁定第一个（单家庭模式）
+                    const firstFam = snapshot.docs[0];
+                    currentFamilyId = firstFam.id;
+                    currentFamilyRooms = firstFam.data().rooms || [];
                 }
             });
-        });
+        }
 
 // 安全监听辅助函数 (防止因找不到元素导致脚本中断)
         function safeListen(id, event, handler) {
@@ -1524,17 +1374,68 @@ safeListen('room-family-select', 'change', async (e) => {
         
         async function execDelete() { try { await deleteDoc(doc(db, "items", currentActionItem.id)); announce("已删除"); closeModals(); } catch(e) { announce("删除失败"); } }
 
-        // Global Keydown
+// Global Keydown
         window.addEventListener('keydown', (e) => {
             if(e.key === 'Escape') {
-                if (currentScreen === 'edit') return; 
-                const menu = document.getElementById('menu-account-dropdown');
-                if (!menu.classList.contains('hidden')) { e.preventDefault(); menu.classList.add('hidden'); document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false'); document.getElementById('btn-account-menu').focus(); return; }
-                const modals = document.querySelectorAll('[id^="modal-"]:not(.hidden)'); if (modals.length > 0) { e.preventDefault(); closeModals(); document.getElementById('modal-qty').classList.add('hidden'); document.getElementById('modal-unit').classList.add('hidden'); return; }
-                if (currentScreen !== 'home' && currentScreen !== 'login') { 
-                    document.getElementById('home-search').value = ''; document.getElementById('takeout-search').value = '';
-                    document.getElementById('btn-clear-home-search').classList.add('hidden'); document.getElementById('btn-clear-takeout-search').classList.add('hidden');
-                    e.preventDefault(); switchScreen('screen-home'); 
+                // 1. 如果有弹窗（模态框）打开，先关闭弹窗
+                const activeModals = document.querySelectorAll('[id^="modal-"]:not(.hidden)');
+                const accountMenu = document.getElementById('menu-account-dropdown');
+                
+                if (!accountMenu.classList.contains('hidden')) {
+                    e.preventDefault(); 
+                    accountMenu.classList.add('hidden'); 
+                    document.getElementById('btn-account-menu').focus();
+                    return;
+                }
+
+                if (activeModals.length > 0) {
+                    e.preventDefault();
+                    closeModals();
+                    document.getElementById('modal-qty').classList.add('hidden');
+                    document.getElementById('modal-unit').classList.add('hidden');
+                    return;
+                }
+
+                // 2. 如果在“新增房间”或“删除房间”界面 -> 返回设置页的“房间管理”Tab
+                if (currentScreen === 'room-add' || currentScreen === 'room-del') {
+                    e.preventDefault();
+                    switchScreen('screen-settings');
+                    switchSettingsTab('tab-rooms');
+                    const tabBtn = document.getElementById('tab-rooms');
+                    if(tabBtn) tabBtn.focus();
+                    return;
+                }
+
+                // 3. 如果在“设置页”、“新增物品页”、“搜索结果页” -> 返回首页
+                if (currentScreen === 'settings' || currentScreen === 'add' || currentScreen === 'results') {
+                    e.preventDefault();
+                    switchScreen('screen-home');
+                    return;
+                }
+
+                // 4. 如果在“编辑页” -> 返回上一页（可能是首页，也可能是搜索结果页）
+                if (currentScreen === 'edit') {
+                    e.preventDefault();
+                    cancelEdit(); // 复用已有的取消编辑逻辑
+                    return;
+                }
+                
+                // 5. 特殊情况：如果在“取出模式”，按ESC返回“首页”
+                if (currentScreen === 'takeout') {
+                    e.preventDefault();
+                    switchScreen('screen-home');
+                    return;
+                }
+
+                // 6. 如果已经在首页，清除搜索框（如果有内容）
+                if (currentScreen === 'home') {
+                    const searchInput = document.getElementById('home-search');
+                    if (searchInput && searchInput.value) {
+                        e.preventDefault();
+                        searchInput.value = '';
+                        document.getElementById('btn-clear-home-search').classList.add('hidden');
+                        announce("已清除搜索");
+                    }
                 }
             }
         });
