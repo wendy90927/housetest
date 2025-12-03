@@ -268,42 +268,33 @@ loadUserFamilies(user);
         });
 
         // --- Data Logic ---
-function setupDataListener(uid) {
+        function setupDataListener(uid) {
             if(unsubscribeItems) unsubscribeItems();
-            
-            // 查询该用户的所有物品
-            // 我们在前端进行家庭过滤，这样能保证数据迁移逻辑顺畅，无需更改复杂的数据库索引
             const q = query(itemsRef, where("uid", "==", uid));
-            
             unsubscribeItems = onSnapshot(q, snap => {
                 let isFirstLoad = allItems.length === 0;
-                
-                // 重新构建 allItems，只保留属于当前家庭的数据
-                const tempAllItems = [];
-                
-                snap.forEach(docSnap => {
-                    const data = { id: docSnap.id, ...docSnap.data() };
-                    
-                    // --- 核心过滤：只保留属于当前家庭的物品 ---
-                    // 兼容性逻辑：如果 data.familyId 存在且不等于当前ID，则跳过
-                    // 如果当前没有选中家庭（极少情况），或者物品本身属于当前家庭，则保留
-                    if (currentFamilyId && data.familyId && data.familyId !== currentFamilyId) {
-                        return; 
-                    }
-                    
+                snap.docChanges().forEach(change => {
+                    const data = { id: change.doc.id, ...change.doc.data() };
                     if (!data.category) data.category = '其他杂项';
                     if (!data.tags) data.tags = [];
-                    tempAllItems.push(data);
+
+                    if (change.type === "added") {
+                        if (isFirstLoad) allItems.push(data); else allItems.unshift(data); 
+                    }
+                    if (change.type === "modified") {
+                        const idx = allItems.findIndex(i => i.id === data.id);
+                        if (idx > -1) allItems[idx] = data;
+                    }
+                    if (change.type === "removed") {
+                        allItems = allItems.filter(i => i.id !== data.id);
+                    }
                 });
                 
-                // 按时间倒序排列
-                tempAllItems.sort((a, b) => {
+                allItems.sort((a, b) => {
                     const timeA = a.updatedAt ? a.updatedAt.toMillis() : Date.now() + 10000;
                     const timeB = b.updatedAt ? b.updatedAt.toMillis() : Date.now() + 10000;
                     return timeB - timeA;
                 });
-                
-                allItems = tempAllItems;
                 
                 if (currentScreen === 'home') refreshHomeList();
                 if (currentScreen === 'takeout') refreshTakeoutList();
@@ -788,99 +779,17 @@ function renderProfileUI() {
 // --- Family Logic ---
         let unsubscribeFamilies = null;
 
-function loadUserFamilies(user) {
+        function loadUserFamilies(user) {
             if (unsubscribeFamilies) unsubscribeFamilies();
+            // 查询当前用户创建的家庭
             const q = query(familiesRef, where("uid", "==", user.uid));
-            
-            unsubscribeFamilies = onSnapshot(q, async (snapshot) => {
+            unsubscribeFamilies = onSnapshot(q, (snapshot) => {
                 userFamilies = [];
                 snapshot.forEach(doc => {
                     userFamilies.push({ id: doc.id, ...doc.data() });
                 });
-
-                // 如果完全没有家庭，才自动创建
-                if (userFamilies.length === 0) {
-                    try {
-                        await addDoc(familiesRef, {
-                            name: "默认家庭",
-                            location: "我的家",
-                            rooms: ["客厅", "厨房", "卧室", "餐厅", "卫生间"],
-                            uid: user.uid,
-                            createdAt: serverTimestamp()
-                        });
-                        announce("已自动创建：默认家庭");
-                        return; // 等待下一次快照更新
-                    } catch (e) { console.error("自动创建失败", e); }
-                }
-
-                // --- 逻辑修正：无论是否已有家庭，都进行状态恢复 ---
-                const savedFamId = localStorage.getItem('last_family_id');
-                const exists = userFamilies.find(f => f.id === savedFamId);
-                
-                if (exists) {
-                    currentFamilyId = savedFamId;
-                } else {
-                    // 如果之前的家庭被删了，或者没有记录，默认选第一个
-                    currentFamilyId = userFamilies[0].id;
-                    localStorage.setItem('last_family_id', currentFamilyId);
-                }
-                
-                // --- 强制检查迁移：将无家可归的物品归入当前家庭 ---
-                // 这样你的旧数据就会立刻显示在当前选中的家庭里
-                migrateOrphanItems(currentFamilyId);
-
-                // 刷新所有界面状态
-                updateTopBarAccountInfo();
-                renderFamilyOptions(); 
-                
-                // 确保菜单逻辑已加载
-                if (typeof renderFamilySwitcher === 'function') {
-                    renderFamilySwitcher(); 
-                }
-                
-                // 重新加载物品数据
-                setupDataListener(user.uid);
+                renderFamilyOptions();
             });
-        }
-
-        // 辅助函数：将没有归属的旧物品，归入当前家庭
-        async function migrateOrphanItems(targetFamId) {
-            // 仅在数据加载初期运行一次检查
-            const q = query(itemsRef, where("uid", "==", auth.currentUser.uid));
-            const snapshot = await getDocs(q);
-            const batch = writeBatch(db);
-            let count = 0;
-            
-            snapshot.forEach(docSnap => {
-                const data = docSnap.data();
-                // 如果物品没有 familyId 字段，则归入当前家庭
-                if (!data.familyId) {
-                    batch.update(docSnap.ref, { familyId: targetFamId });
-                    count++;
-                }
-            });
-
-            if (count > 0) {
-                await batch.commit();
-                announce(`已将系统内的 ${count} 个物品归入默认家庭`);
-                // 强制刷新列表
-                setupDataListener(auth.currentUser.uid);
-            }
-        }
-
-        // 辅助函数：更新顶部朗读信息
-        function updateTopBarAccountInfo() {
-            if(!auth.currentUser) return;
-            const currentFamName = userFamilies.find(f => f.id === currentFamilyId)?.name || '未选择';
-            const finalNick = userProfile.nickname || auth.currentUser.email.split('@')[0];
-            
-            document.getElementById('user-email-display').textContent = finalNick;
-            
-            // 关键无障碍设置：朗读当前家庭
-            const btn = document.getElementById('btn-account-menu');
-            if(btn) {
-                btn.setAttribute('aria-label', `当前账号：${finalNick}，家庭：${currentFamName}。点击展开菜单`);
-            }
         }
 
         function renderFamilyOptions() {
@@ -953,7 +862,7 @@ function loadUserFamilies(user) {
             toggleFamilyForm(true, 'new');
         });
 
-// 按钮：编辑家庭
+        // 按钮：编辑家庭
         document.getElementById('btn-fam-edit').addEventListener('click', () => {
             if (!currentFamilyId) { announce("没有可编辑的家庭"); return; }
             const fam = userFamilies.find(f => f.id === currentFamilyId);
@@ -963,48 +872,6 @@ function loadUserFamilies(user) {
                 document.getElementById('input-fam-loc').value = fam.location || '';
                 toggleFamilyForm(true, 'edit');
             }
-        });
-
-// 改用全局委托监听，确保无论 Tab 如何切换，点击事件都有效
-        document.addEventListener('click', (e) => {
-            const btnDel = e.target.closest('#btn-fam-del');
-            if (!btnDel) return;
-
-            // 阻止冒泡
-            e.preventDefault();
-            e.stopPropagation();
-
-            if (!currentFamilyId) { 
-                announce("操作无效：未选中任何家庭"); 
-                return; 
-            }
-            
-            const fam = userFamilies.find(f => f.id === currentFamilyId);
-            if (!fam) { 
-                announce("数据同步错误，请刷新页面"); 
-                return; 
-            }
-
-            openGenericConfirm(`高危操作：确定删除家庭“${fam.name}”吗？\n删除后，该家庭将被永久移除，且无法恢复。`, async () => {
-                try {
-                    await deleteDoc(doc(db, "families", currentFamilyId));
-                    announce(`已成功删除：${fam.name}`);
-                    
-                    // 清理状态
-                    localStorage.removeItem('last_family_id');
-                    currentFamilyId = null;
-                    
-                    closeModals();
-                    
-                    // 强制聚焦到下拉框，避免焦点丢失
-                    const select = document.getElementById('manage-family-select');
-                    if(select) select.focus();
-                    
-                } catch(err) {
-                    console.error("删除失败:", err);
-                    announce("删除失败，请检查网络");
-                }
-            });
         });
 
         // 按钮：保存家庭 (新增或更新)
@@ -1042,52 +909,21 @@ rooms: ["客厅", "厨房", "卧室", "餐厅", "卫生间"],
         // 按钮：取消
         document.getElementById('btn-fam-cancel').addEventListener('click', () => toggleFamilyForm(false));
 
-// ==========================================
-        // 全局事件委托：处理菜单交互与删除逻辑 (增强修复版)
-        // ==========================================
-
-// 1. 处理全局点击 (仅保留菜单触发器，删除按钮改用直接绑定)
-        document.addEventListener('click', (e) => {
-            // 切换家庭菜单触发器
-            const switchBtn = e.target.closest('#btn-switch-family-trigger');
-            if (switchBtn) {
-                e.stopPropagation();
-                toggleFamilySubmenu();
-            }
-        });
-
-// 2. 处理全局键盘导航 (菜单触发器)
-document.addEventListener('keydown', (e) => {
-            const triggerBtn = e.target.closest('#btn-switch-family-trigger');
-            
-            if (triggerBtn) {
-                if (e.key === 'ArrowRight') {
-                    // 右光标：展开子菜单
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (userFamilies.length > 0) {
-                        openFamilySubmenu();
-                    } else {
-                        announce("暂无其他家庭");
-                    }
-                } else if (e.key === 'ArrowDown') {
-                    // 下光标：拦截默认行为，强制聚焦到下一个主菜单项 (账户与家庭管理)
-                    e.preventDefault(); 
-                    e.stopPropagation();
-                    closeFamilySubmenu(); 
-                    
-                    const nextBtn = document.getElementById('btn-open-settings');
-                    if (nextBtn) nextBtn.focus();
-                } else if (e.key === 'ArrowUp') {
-                    // 上光标 (新增)：循环跳转到菜单最底部的按钮 (退出登录)
-                    e.preventDefault(); 
-                    e.stopPropagation();
-                    closeFamilySubmenu(); 
-                    
-                    const lastBtn = document.getElementById('btn-logout');
-                    if (lastBtn) lastBtn.focus();
+        // 按钮：删除家庭
+        document.getElementById('btn-fam-del').addEventListener('click', () => {
+            if (!currentFamilyId) return;
+            const fam = userFamilies.find(f => f.id === currentFamilyId);
+            openGenericConfirm(`确定删除家庭“${fam.name}”吗？这不会删除里面的物品。`, async () => {
+                try {
+                    await deleteDoc(doc(db, "families", currentFamilyId));
+                    announce("家庭已删除");
+document.getElementById('manage-family-select').focus();
+                    closeModals(); // 关闭确认弹窗
+                    // 逻辑上需要重置选中状态，loadUserFamilies 会自动处理
+                } catch(e) {
+                    announce("删除失败");
                 }
-            }
+            });
         });
 
 // 安全监听辅助函数 (防止因找不到元素导致脚本中断)
@@ -1445,7 +1281,6 @@ safeListen('room-family-select', 'change', async (e) => {
                     room: document.getElementById('add-room').value,
                     location: document.getElementById('add-location').value,
                     quantity: pendingAddQty,
-familyId: currentFamilyId,
                     uid: auth.currentUser.uid,
                     updatedAt: serverTimestamp()
                 });
@@ -1688,127 +1523,6 @@ familyId: currentFamilyId,
         safeListen('btn-confirm-cancel', 'click', () => { if(window.closeModals) window.closeModals(); });
         
         async function execDelete() { try { await deleteDoc(doc(db, "items", currentActionItem.id)); announce("已删除"); closeModals(); } catch(e) { announce("删除失败"); } }
-
-// --- 家庭切换菜单逻辑 ---
-function renderFamilySwitcher() {
-            const container = document.getElementById('submenu-family-list');
-            if(!container) return;
-            
-            // 1. 清空列表
-            container.innerHTML = '';
-            
-            // 2. 填充家庭列表
-            userFamilies.forEach((fam) => {
-                const item = document.createElement('button');
-                item.className = "w-full text-left px-4 py-3 hover:bg-blue-50 font-bold border-b border-gray-100 focus:bg-blue-100 focus:text-blue-900 focus:outline-none";
-                item.textContent = fam.name;
-                
-                if(fam.id === currentFamilyId) {
-                    item.textContent += " (当前)";
-                    item.classList.add("text-blue-700", "bg-blue-50");
-                }
-
-                item.setAttribute('role', 'menuitem');
-                item.setAttribute('tabindex', '-1'); 
-
-                // 列表项内部的事件保持不变
-                item.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    switchFamily(fam.id);
-                });
-
-                item.addEventListener('keydown', (e) => {
-                    e.stopPropagation(); 
-                    if (e.key === 'ArrowDown') {
-                        e.preventDefault();
-                        const next = item.nextElementSibling || container.firstElementChild;
-                        if(next) next.focus();
-                    } else if (e.key === 'ArrowUp') {
-                        e.preventDefault();
-                        const prev = item.previousElementSibling || container.lastElementChild;
-                        if(prev) prev.focus();
-                    } else if (e.key === 'ArrowLeft') {
-                        e.preventDefault();
-                        closeFamilySubmenu(); 
-                    } else if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        switchFamily(fam.id);
-                    } else if (e.key === 'Escape') {
-                        closeFamilySubmenu();
-                        document.getElementById('btn-account-menu').focus(); 
-                    }
-                });
-
-                container.appendChild(item);
-            });
-            
-            // 3. 确保触发按钮有正确的角色 (不再绑定事件，全靠全局委托)
-            const triggerBtn = document.getElementById('btn-switch-family-trigger');
-            if(triggerBtn) {
-                triggerBtn.setAttribute('role', 'menuitem');
-                triggerBtn.setAttribute('aria-haspopup', 'menu');
-                triggerBtn.setAttribute('aria-expanded', 'false');
-            }
-        }
-
-        function openFamilySubmenu() {
-            const sub = document.getElementById('submenu-family-list');
-            const trigger = document.getElementById('btn-switch-family-trigger');
-            if(!sub || sub.children.length === 0) return;
-            
-            sub.classList.remove('hidden');
-            trigger.setAttribute('aria-expanded', 'true');
-            
-            // 立即聚焦列表中的第一个项目
-            setTimeout(() => {
-                const firstItem = sub.firstElementChild;
-                if(firstItem) firstItem.focus();
-            }, 50);
-        }
-
-        function closeFamilySubmenu() {
-            const sub = document.getElementById('submenu-family-list');
-            const trigger = document.getElementById('btn-switch-family-trigger');
-            if(!sub) return;
-            sub.classList.add('hidden');
-            if(trigger) {
-                trigger.setAttribute('aria-expanded', 'false');
-                trigger.focus(); // 焦点必须还给触发按钮
-            }
-        }
-
-        function toggleFamilySubmenu() {
-            const sub = document.getElementById('submenu-family-list');
-            if (sub.classList.contains('hidden')) openFamilySubmenu();
-            else closeFamilySubmenu();
-        }
-
-        function switchFamily(famId) {
-            if(famId === currentFamilyId) {
-                announce("已经是当前家庭");
-                return;
-            }
-            currentFamilyId = famId;
-            localStorage.setItem('last_family_id', famId);
-            
-            // 更新 UI 和 房间数据
-            updateTopBarAccountInfo();
-            renderFamilySwitcher(); 
-            
-            const fam = userFamilies.find(f => f.id === famId);
-            if(fam && fam.rooms) currentFamilyRooms = fam.rooms;
-            
-            // 重新拉取物品数据
-            setupDataListener(auth.currentUser.uid);
-            
-            announce(`已切换到家庭：${fam ? fam.name : ''}`);
-            
-            // 关闭所有菜单并回到主页
-            document.getElementById('menu-account-dropdown').classList.add('hidden');
-            document.getElementById('submenu-family-list').classList.add('hidden');
-            document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false');
-            switchScreen('screen-home');
-        }
 
         // Global Keydown
         window.addEventListener('keydown', (e) => {
