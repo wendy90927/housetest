@@ -1,6 +1,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged, deleteUser, updatePassword, setPersistence, browserLocalPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, getDocs, onSnapshot, query, where, doc, setDoc, getDoc, updateDoc, deleteDoc, writeBatch, increment, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged, deleteUser, setPersistence, browserLocalPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch, increment, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // Config
         const firebaseConfig = {
@@ -16,8 +16,6 @@ import { getFirestore, collection, addDoc, getDocs, onSnapshot, query, where, do
         const auth = getAuth(app);
         const db = getFirestore(app);
         const itemsRef = collection(db, "items");
-const profilesRef = collection(db, "profiles");
-const familiesRef = collection(db, "families");
 
         // --- State ---
         let allItems = [];
@@ -33,16 +31,7 @@ const familiesRef = collection(db, "families");
         let focusTargetId = null; 
         let searchResults = [];
 
-// --- Settings State ---
-        let userProfile = { nickname: '', identity: '其他' };
-        let userFamilies = []; 
-        let currentFamilyId = null;
-let isEditingFamily = false;
-const SYSTEM_ROOMS = ["客厅", "厨房", "卧室", "书房", "餐厅", "玄关", "卫生间", "洗衣房", "阳台", "次卧", "阁楼", "地下室", "车库", "仓库"];
-let currentFamilyRooms = []; // 当前家庭已拥有的房间
-        let pendingSelectedDefaults = new Set(); // 用户正在勾选的预设房间
-        
-// 标签暂存
+        // 标签暂存
         let pendingTags = []; 
 
         // 自动推断规则
@@ -91,7 +80,7 @@ let currentFamilyRooms = []; // 当前家庭已拥有的房间
         const savedUnits = JSON.parse(localStorage.getItem('custom_units') || '[]');
         UNIT_LIST = [...new Set([...UNIT_LIST, ...savedUnits])];
 
-function learnNewUnit(unit) {
+        function learnNewUnit(unit) {
             if(!unit) return;
             if(!UNIT_LIST.includes(unit)) {
                 UNIT_LIST.push(unit);
@@ -100,29 +89,14 @@ function learnNewUnit(unit) {
         }
 
         const savedEmail = localStorage.getItem('savedEmail');
-        if(savedEmail && document.getElementById('login-email')) {
-            document.getElementById('login-email').value = savedEmail;
-        }
+        if(savedEmail) document.getElementById('login-email').value = savedEmail;
 
-        let announceTimer = null;
         window.announce = (msg, type = 'normal') => {
             const el = document.getElementById('live-announcer');
-            if(!el) return;
-            
-            if (announceTimer) clearTimeout(announceTimer);
-            
-            el.textContent = ''; 
-            
-            setTimeout(() => {
-                el.textContent = msg;
-                if (msg.includes("成功") || msg.includes("已添加") || msg.includes("已删除") || msg.includes("已更新") || msg.includes("自动填入") || msg.includes("已切换")) {
-                    playSound('success');
-                } else if (msg.includes("失败") || msg.includes("错误") || msg.includes("不足") || msg.includes("未找到")) {
-                    playSound('error');
-                }
-            }, 50);
-
-            announceTimer = setTimeout(() => el.textContent = '', 3000);
+            el.textContent = msg;
+            if (msg.includes("成功") || msg.includes("已添加") || msg.includes("已删除") || msg.includes("自动填入")) playSound('success');
+            else if (msg.includes("失败") || msg.includes("错误") || msg.includes("不足") || msg.includes("未找到")) playSound('error');
+            setTimeout(() => el.textContent = '', 1000);
         };
 
         // --- Focus Trap ---
@@ -170,7 +144,6 @@ function learnNewUnit(unit) {
             else if (screenId === 'screen-results') currentScreen = 'results';
             else if (screenId === 'screen-edit') currentScreen = 'edit';
             else if (screenId === 'screen-add') currentScreen = 'add';
-else if (screenId === 'screen-settings') currentScreen = 'settings';
             else currentScreen = 'other';
             
             if (!focusTargetId) {
@@ -191,8 +164,6 @@ else if (screenId === 'screen-settings') currentScreen = 'settings';
                 document.getElementById('user-email-display').textContent = user.email.split('@')[0];
                 switchScreen('screen-home');
                 setupDataListener(user.uid);
-loadUserProfile(user);
-loadUserFamilies(user);
             } else {
                 if(unsubscribeItems) unsubscribeItems();
                 allItems = [];
@@ -551,577 +522,21 @@ loadUserFamilies(user);
         
         document.getElementById('btn-back-add').addEventListener('click', () => switchScreen('screen-home'));
         document.getElementById('btn-nav-data').addEventListener('click', () => switchScreen('screen-data'));
-
-// --- Settings Navigation ---
-        document.getElementById('btn-open-settings').addEventListener('click', () => {
-            document.getElementById('menu-account-dropdown').classList.add('hidden');
-            switchScreen('screen-settings');
-            // 默认打开第一个标签
-            switchSettingsTab('tab-profile');
-        });
-
-        document.getElementById('btn-back-settings').addEventListener('click', () => switchScreen('screen-home'));
-
-function switchSettingsTab(tabId) {
-            // 隐藏所有面板
-            document.getElementById('panel-profile').classList.add('hidden');
-            document.getElementById('panel-rooms').classList.add('hidden');
-            
-            // 重置按钮状态
-            ['tab-profile', 'tab-rooms'].forEach(id => {
-                const btn = document.getElementById(id);
-                if(btn) {
-                    btn.setAttribute('aria-selected', 'false');
-                    btn.setAttribute('tabindex', '-1');
-                    btn.classList.remove('border-b-4', 'border-blue-800', 'text-blue-800');
-                    btn.classList.add('text-gray-600');
-                }
-            });
-
-            // 显示目标面板
-            const key = tabId.replace('tab-', '');
-            const panel = document.getElementById(`panel-${key}`);
-            if (panel) panel.classList.remove('hidden');
-
-            // 激活目标按钮
-            const activeBtn = document.getElementById(tabId);
-            if (activeBtn) {
-                activeBtn.setAttribute('aria-selected', 'true');
-                activeBtn.setAttribute('tabindex', '0');
-                activeBtn.classList.add('border-b-4', 'border-blue-800', 'text-blue-800');
-                activeBtn.classList.remove('text-gray-600');
-            }
-        }
-
-let unsubscribeProfile = null;
-
-        function loadUserProfile(user) {
-            if (unsubscribeProfile) unsubscribeProfile();
-            unsubscribeProfile = onSnapshot(doc(db, "profiles", user.uid), (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    userProfile.nickname = data.nickname || user.email;
-                    userProfile.identity = data.identity || '其他';
-                } else {
-                    userProfile.nickname = user.email;
-                    userProfile.identity = '其他';
-                }
-// 实时更新主页顶部账户按钮显示
-                const email = user.email || '';
-                const displayNick = userProfile.nickname || email.split('@')[0];
-                const displayEl = document.getElementById('user-email-display');
-                const btnAccount = document.getElementById('btn-account-menu');
-                
-                if (displayEl) displayEl.textContent = displayNick;
-                if (btnAccount) {
-                    btnAccount.setAttribute('aria-label', `当前账号：${displayNick}，${email}，点击展开菜单`);
-                }
-// 更新设置页面的UI
-                if (currentScreen === 'settings') renderProfileUI();
-                
-                // 强制更新主页顶部账户按钮的读屏标签和文字
-                const topBtn = document.getElementById('btn-account-menu');
-                const topText = document.getElementById('user-email-display');
-                if (topBtn && topText) {
-                    const finalNick = userProfile.nickname || user.email.split('@')[0];
-                    topText.textContent = finalNick;
-                    // 按照要求的格式设置 aria-label
-                    topBtn.setAttribute('aria-label', `当前账号：${finalNick}，${user.email}，点击展开菜单`);
-                }
-            });
-        }
-
-function renderProfileUI() {
-            document.getElementById('set-nickname').value = userProfile.nickname;
-            
-            // 身份回显逻辑
-            const select = document.getElementById('set-identity-select');
-            const customBox = document.getElementById('box-identity-custom');
-            const customInput = document.getElementById('set-identity-custom');
-            const standardOptions = ['爸爸', '妈妈', '儿子', '女儿', '老人'];
-
-            if (standardOptions.includes(userProfile.identity)) {
-                select.value = userProfile.identity;
-                customBox.classList.add('hidden');
-                customInput.value = '';
-            } else {
-                select.value = '自定义';
-                customBox.classList.remove('hidden');
-                customInput.value = userProfile.identity;
-            }
-        }
-
-// 监听身份下拉框变化
-        document.getElementById('set-identity-select').addEventListener('change', (e) => {
-            const box = document.getElementById('box-identity-custom');
-            if (e.target.value === '自定义') {
-                box.classList.remove('hidden');
-            } else {
-                box.classList.add('hidden');
-            }
-        });
-
-// 监听修改密码按钮 (打开弹窗)
-        const btnPassModal = document.getElementById('btn-open-password-modal');
-        if (btnPassModal) {
-            btnPassModal.addEventListener('click', () => {
-                const m = document.getElementById('modal-change-pass');
-                m.classList.remove('hidden');
-                document.getElementById('input-new-pass').value = '';
-                document.getElementById('input-confirm-pass').value = '';
-                setTimeout(() => document.getElementById('title-change-pass').focus(), 100);
-            });
-        }
-
-        // 密码弹窗：取消
-        const btnPassCancel = document.getElementById('btn-pass-cancel');
-        if (btnPassCancel) {
-            btnPassCancel.addEventListener('click', () => {
-                document.getElementById('modal-change-pass').classList.add('hidden');
-                if(btnPassModal) btnPassModal.focus(); // 焦点归位
-                announce("已取消修改密码");
-            });
-        }
-
-        // 密码弹窗：确定
-        const btnPassSave = document.getElementById('btn-pass-save');
-        if (btnPassSave) {
-            btnPassSave.addEventListener('click', async () => {
-                const p1 = document.getElementById('input-new-pass').value;
-                const p2 = document.getElementById('input-confirm-pass').value;
-                
-                if (p1.length < 6) { announce("密码太短，至少6位"); return; }
-                if (p1 !== p2) { announce("两次密码不一致"); return; }
-                
-                try {
-                    await updatePassword(auth.currentUser, p1);
-                    announce("密码修改成功");
-                    document.getElementById('modal-change-pass').classList.add('hidden');
-                    if(btnPassModal) btnPassModal.focus();
-                } catch (e) {
-                    console.error(e);
-                    announce("修改失败，可能需要重新登录");
-                }
-            });
-        }
-
-        // 监听保存按钮
-        document.getElementById('btn-save-profile').addEventListener('click', async () => {
-            const nick = document.getElementById('set-nickname').value.trim();
-            const selectVal = document.getElementById('set-identity-select').value;
-            let finalIdentity = selectVal;
-            
-            if (selectVal === '自定义') {
-                finalIdentity = document.getElementById('set-identity-custom').value.trim();
-                if (!finalIdentity) {
-                    announce("请输入自定义身份");
-                    document.getElementById('set-identity-custom').focus();
-                    return;
-                }
-            }
-
-            try {
-                await setDoc(doc(db, "profiles", auth.currentUser.uid), {
-                    nickname: nick || auth.currentUser.email,
-                    identity: finalIdentity,
-                    updatedAt: serverTimestamp()
-                }, { merge: true });
-                announce("个人资料已保存");
-            } catch (e) {
-                console.error(e);
-                announce("资料保存失败");
-                return;
-            }
-});
-
-        // 监听取消按钮
-        document.getElementById('btn-profile-cancel').addEventListener('click', () => {
-             switchScreen('screen-home');
-             announce("已取消");
-        });
-
-        document.getElementById('tab-profile').addEventListener('click', renderProfileUI);
-
-// --- Family Logic ---
-        let unsubscribeFamilies = null;
-
-        function loadUserFamilies(user) {
-            if (unsubscribeFamilies) unsubscribeFamilies();
-            // 监听用户的家庭数据
-            const q = query(familiesRef, where("uid", "==", user.uid));
-            
-            unsubscribeFamilies = onSnapshot(q, async (snapshot) => {
-                if (snapshot.empty) {
-                    // 如果没有家庭，自动创建一个“我的家”
-                    try {
-                        const docRef = await addDoc(familiesRef, {
-                            name: "我的家",
-                            location: "默认",
-                            rooms: ["客厅", "厨房", "卧室", "餐厅", "卫生间"],
-                            uid: user.uid,
-                            createdAt: serverTimestamp()
-                        });
-                        currentFamilyId = docRef.id;
-                        currentFamilyRooms = ["客厅", "厨房", "卧室", "餐厅", "卫生间"];
-                        console.log("已自动初始化家庭");
-                    } catch (e) {
-                        console.error("自动创建家庭失败", e);
-                    }
-                } else {
-                    // 只要有家庭，就自动锁定第一个（单家庭模式）
-                    const firstFam = snapshot.docs[0];
-                    currentFamilyId = firstFam.id;
-                    currentFamilyRooms = firstFam.data().rooms || [];
-                }
-            });
-        }
-
-// 安全监听辅助函数 (防止因找不到元素导致脚本中断)
-        function safeListen(id, event, handler) {
-            const el = document.getElementById(id);
-            if (el) {
-                el.addEventListener(event, handler);
-            }
-        }
-
-        // 切换到房间面板时：仅同步数据
-        safeListen('tab-rooms', 'click', async () => {
-             const famId = document.getElementById('room-family-select') ? document.getElementById('room-family-select').value : null;
-             if(famId) currentFamilyId = famId;
-             if (!currentFamilyId) return;
-             
-             const famDoc = await getDoc(doc(db, "families", currentFamilyId));
-             if (famDoc.exists()) {
-                currentFamilyRooms = famDoc.data().rooms || [];
-             } else {
-                currentFamilyRooms = [];
-             }
-        });
-
-        // 按钮：进入“新增房间”界面
-        safeListen('btn-to-room-add', 'click', () => {
-            if(!currentFamilyId) { announce("请先选择一个家庭"); return; }
-            switchScreen('screen-room-add');
-            renderPresetKeyboardList();
-            const input = document.getElementById('input-custom-room');
-            if(input) input.value = '';
-            announce("进入新增房间界面");
-        });
-
-        // 按钮：进入“删除房间”界面
-        safeListen('btn-to-room-del', 'click', () => {
-            if(!currentFamilyId) { announce("请先选择一个家庭"); return; }
-            switchScreen('screen-room-del');
-            renderDeleteRoomList();
-            announce("进入删除房间界面");
-        });
-
-        // 逻辑：渲染删除列表
-// 存储用户在删除界面勾选的房间
-        let pendingDeleteRooms = new Set();
-
-function renderDeleteRoomList() {
-            const container = document.getElementById('list-delete-rooms');
-            if(!container) return;
-            container.innerHTML = '';
-            pendingDeleteRooms.clear();
-            
-            if(currentFamilyRooms.length === 0) {
-                container.innerHTML = '<p class="text-gray-500 text-lg font-bold p-2">当前没有任何房间。</p>';
-                document.getElementById('btn-confirm-del-rooms').disabled = true;
-                return;
-            }
-            
-            document.getElementById('btn-confirm-del-rooms').disabled = false;
-
-            currentFamilyRooms.forEach((room, index) => {
-                // 创建一个相对定位的容器，不再使用 label 标签以免引起读屏混乱
-                const div = document.createElement('div');
-                div.className = "relative mb-3";
-                
-                // 核心修改：
-                // 1. input 使用 absolute + opacity-0 铺满整个容器。它就在"屏幕内"，解决了"屏幕外"提示。
-                // 2. input 直接设置 aria-label，读屏软件只认这个，解决冗余朗读。
-                // 3. 下方的视觉 div 设置 aria-hidden="true"，对读屏完全不可见。
-                div.innerHTML = `
-                    <input type="checkbox" 
-                           class="peer absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer" 
-                           tabindex="${index === 0 ? '0' : '-1'}"
-                           aria-label="${room}">
-                    
-                    <div class="flex items-center justify-between p-4 rounded-lg border-2 border-gray-200 bg-white 
-                                transition-all
-                                peer-focus:ring-4 peer-focus:ring-red-200 peer-focus:border-red-600 
-                                peer-checked:bg-red-50 peer-checked:border-red-600"
-                                aria-hidden="true">
-                        
-                        <span class="text-xl font-bold text-gray-800">${room}</span>
-                        
-                        <div class="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center bg-white
-                                    peer-checked:border-red-600 peer-checked:bg-red-600">
-                            <span class="text-white font-bold text-lg opacity-0 peer-checked:opacity-100">✕</span>
-                        </div>
-                    </div>
-                `;
-
-                const input = div.querySelector('input');
-
-                // 监听原生 change 事件
-                input.addEventListener('change', () => {
-                    if(input.checked) {
-                        pendingDeleteRooms.add(room);
-                    } else {
-                        pendingDeleteRooms.delete(room);
-                    }
-                });
-
-                // 键盘导航：接管上下箭头
-                input.addEventListener('keydown', (e) => {
-                    if(e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                        e.preventDefault();
-                        const allInputs = document.querySelectorAll('#list-delete-rooms input');
-                        const currentIndex = Array.from(allInputs).indexOf(input);
-                        let nextIndex;
-                        
-                        if (e.key === 'ArrowDown') {
-                            nextIndex = (currentIndex + 1) % allInputs.length;
-                        } else {
-                            nextIndex = (currentIndex - 1 + allInputs.length) % allInputs.length;
-                        }
-                        
-                        // 移动焦点
-                        input.setAttribute('tabindex', '-1');
-                        const target = allInputs[nextIndex];
-                        target.setAttribute('tabindex', '0');
-                        target.focus();
-                    }
-                });
-
-                container.appendChild(div);
-            });
-        }
-
-        // 绑定删除界面的“保存并删除”按钮
-        safeListen('btn-confirm-del-rooms', 'click', () => {
-            if(pendingDeleteRooms.size === 0) {
-                announce("未勾选任何房间");
-                return;
-            }
-            
-            openGenericConfirm(`确定删除这 ${pendingDeleteRooms.size} 个房间吗？`, async () => {
-                // 执行真正的删除逻辑：保留那些【不在】删除列表里的房间
-                const newRooms = currentFamilyRooms.filter(r => !pendingDeleteRooms.has(r));
-                
-                currentFamilyRooms = newRooms;
-                await saveRoomsToFirestore();
-                
-                announce("房间已删除");
-                closeModals();
-                
-                // 返回设置页
-                switchScreen('screen-settings');
-                const tab = document.getElementById('tab-rooms');
-                if(tab) tab.click();
-            });
-        });
-
-        // 渲染预设房间列表
-function renderPresetKeyboardList() {
-            const container = document.getElementById('preset-room-list');
-            if(!container) return;
-            container.innerHTML = '';
-            pendingSelectedDefaults.clear(); 
-            
-            // 过滤出还没添加过的房间
-            const availableDefaults = SYSTEM_ROOMS.filter(r => !currentFamilyRooms.includes(r));
-            
-            if (availableDefaults.length === 0) {
-                container.innerHTML = '<div class="p-4 text-gray-500 font-bold" tabindex="0">常用房间都已添加完毕。</div>';
-                return;
-            }
-
-            availableDefaults.forEach((room, index) => {
-                // 创建可聚焦的选项行
-                const div = document.createElement('div');
-                // 默认未选中
-                const isChecked = false;
-                
-                // 样式与ARIA设置
-                div.className = "flex items-center justify-between p-4 rounded-lg cursor-pointer border-2 border-gray-200 bg-white hover:bg-gray-50 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 outline-none transition-all";
-                div.setAttribute('role', 'checkbox');
-                div.setAttribute('aria-checked', 'false');
-                // 只有第一个元素可聚焦（Roving Tabindex 初始状态）
-                div.setAttribute('tabindex', index === 0 ? '0' : '-1');
-                div.dataset.room = room;
-
-                // 内部视觉结构
-                div.innerHTML = `
-                    <span class="text-xl font-bold text-gray-800">${room}</span>
-                    <div class="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center status-icon">
-                        <span class="hidden text-white font-bold">✓</span>
-                    </div>
-                `;
-
-                // 绑定交互事件
-                div.addEventListener('click', () => toggleRoomSelection(div, room));
-                div.addEventListener('keydown', (e) => handleRoomListKeydown(e, div, room));
-                
-                container.appendChild(div);
-            });
-        }
-
-        // 切换选中状态的核心逻辑
-        function toggleRoomSelection(el, roomName) {
-            const iconBox = el.querySelector('.status-icon');
-            const checkMark = iconBox.querySelector('span');
-            
-            if (pendingSelectedDefaults.has(roomName)) {
-                // 执行取消
-                pendingSelectedDefaults.delete(roomName);
-                el.setAttribute('aria-checked', 'false');
-                el.classList.remove('bg-blue-50', 'border-blue-500');
-                el.classList.add('border-gray-200');
-                
-                iconBox.classList.remove('bg-blue-600', 'border-blue-600');
-                iconBox.classList.add('border-gray-300');
-                checkMark.classList.add('hidden');
-                
-                announce(`已取消 ${roomName}`);
-            } else {
-                // 执行选中
-                pendingSelectedDefaults.add(roomName);
-                el.setAttribute('aria-checked', 'true');
-                el.classList.add('bg-blue-50', 'border-blue-500');
-                el.classList.remove('border-gray-200');
-                
-                iconBox.classList.add('bg-blue-600', 'border-blue-600');
-                iconBox.classList.remove('border-gray-300');
-                checkMark.classList.remove('hidden');
-                
-                announce(`已选中 ${roomName}`);
-            }
-        }
-
-        // 键盘导航处理 (上下键漫游 + 空格键选中)
-        function handleRoomListKeydown(e, currentEl, roomName) {
-            if (e.key === ' ' || e.key === 'Enter') {
-                e.preventDefault();
-                toggleRoomSelection(currentEl, roomName);
-            } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                e.preventDefault();
-                const allItems = Array.from(document.querySelectorAll('#preset-room-list [role="checkbox"]'));
-                const currentIndex = allItems.indexOf(currentEl);
-                let nextIndex;
-
-                if (e.key === 'ArrowDown') {
-                    nextIndex = (currentIndex + 1) % allItems.length;
-                } else {
-                    nextIndex = (currentIndex - 1 + allItems.length) % allItems.length;
-                }
-
-                // 移动焦点：旧元素设为 -1，新元素设为 0 并聚焦
-                currentEl.setAttribute('tabindex', '-1');
-                const target = allItems[nextIndex];
-                target.setAttribute('tabindex', '0');
-                target.focus();
-            }
-        }
-
-        async function saveRoomsToFirestore() {
-            if (!currentFamilyId) return;
-            try {
-                await updateDoc(doc(db, "families", currentFamilyId), {
-                    rooms: currentFamilyRooms,
-                    updatedAt: serverTimestamp()
-                });
-            } catch (e) {
-                console.error(e);
-                announce("保存房间失败");
-            }
-        }
-
-        // 房间管理界面的返回与保存逻辑
-
-// 绑定“新增房间”界面的保存按钮
-        safeListen('btn-confirm-add-rooms', 'click', async () => {
-             const customInput = document.getElementById('input-custom-room');
-             const customName = customInput ? customInput.value.trim() : '';
-             
-             // 如果输入了自定义房间，先把它加入待添加列表
-             if(customName) {
-                 if(!currentFamilyRooms.includes(customName)) {
-                     pendingSelectedDefaults.add(customName);
-                 }
-             }
-
-             // 检查是否有内容
-             if (pendingSelectedDefaults.size === 0) { 
-                 announce("请选择或输入至少一个新房间"); 
-                 return; 
-             }
-
-             // 合并数据
-             pendingSelectedDefaults.forEach(r => {
-                 if (!currentFamilyRooms.includes(r)) currentFamilyRooms.push(r);
-             });
-
-             await saveRoomsToFirestore();
-             announce(`成功添加 ${pendingSelectedDefaults.size} 个房间`);
-             
-             // 清理并返回
-             if(customInput) customInput.value = '';
-             switchScreen('screen-settings');
-             const tab = document.getElementById('tab-rooms');
-             if(tab) tab.click();
-        });
-
-        safeListen('btn-back-from-add-room', 'click', () => {
-            switchScreen('screen-settings');
-            const tab = document.getElementById('tab-rooms');
-            if(tab) tab.click();
-            announce("已取消");
-        });
-
-
-
-        safeListen('btn-back-from-del-room', 'click', () => {
-            switchScreen('screen-settings');
-            const tab = document.getElementById('tab-rooms');
-            if(tab) tab.click();
-            announce("返回房间管理");
-        });
+        document.getElementById('btn-back-data').addEventListener('click', () => switchScreen('screen-home'));
         
-safeListen('room-family-select', 'change', async (e) => {
-             const val = e.target.value;
-             if(val) currentFamilyId = val;
-             
-             if (!currentFamilyId) return;
-             try {
-                const famDoc = await getDoc(doc(db, "families", currentFamilyId));
-                if (famDoc.exists()) {
-                    currentFamilyRooms = famDoc.data().rooms || [];
-                } else {
-                    currentFamilyRooms = [];
-                }
-                announce("已切换家庭，房间列表已更新");
-             } catch(err) {
-                 console.error(err);
-             }
-        });
-
-        safeListen('btn-back-data', 'click', () => switchScreen('screen-home'));
-        
-        safeListen('btn-add-qty-trigger', 'click', () => {
+        document.getElementById('btn-add-qty-trigger').addEventListener('click', () => {
             openQtyPicker("初始数量", (val) => {
                 pendingAddQty = val;
                 updateAddQtyDisplay();
             });
         });
 
-        safeListen('form-add', 'submit', async (e) => {
+        // 修改: 提交后不跳转，重置表单并聚焦 Name 输入框
+        document.getElementById('form-add').addEventListener('submit', async (e) => {
             e.preventDefault();
             const name = document.getElementById('add-name').value.trim();
             if(!name) return;
+            
             try {
                 await addDoc(itemsRef, {
                     name: name,
@@ -1143,10 +558,11 @@ safeListen('room-family-select', 'change', async (e) => {
                 document.getElementById('add-name').focus();
             } catch(err) {
                 announce("添加失败");
+                console.error(err);
             }
         });
 
-        safeListen('btn-cancel-add', 'click', () => {
+        document.getElementById('btn-cancel-add').addEventListener('click', () => {
             switchScreen('screen-home');
             announce("已取消");
         });
@@ -1156,14 +572,13 @@ safeListen('room-family-select', 'change', async (e) => {
             if(currentActionItem) focusTargetId = currentActionItem.id;
             switchScreen('screen-' + previousScreen);
         }
-        safeListen('btn-back-edit', 'click', cancelEdit);
-        safeListen('btn-cancel-edit-form', 'click', cancelEdit);
+        document.getElementById('btn-back-edit').addEventListener('click', cancelEdit);
+        document.getElementById('btn-cancel-edit-form').addEventListener('click', cancelEdit);
 
         // Unit Picker
         let unitTargetInput = null;
         const unitGrid = document.getElementById('unit-grid');
         function initUnitGrid() {
-            if(!unitGrid) return;
             unitGrid.innerHTML = '';
             UNIT_LIST.forEach(u => {
                 const btn = document.createElement('button');
@@ -1176,22 +591,15 @@ safeListen('room-family-select', 'change', async (e) => {
             });
         }
         window.openUnitPicker = (inputId) => {
-            playSound('click'); 
-            unitTargetInput = document.getElementById(inputId); 
-            if(unitGrid) initUnitGrid(); 
-            const m = document.getElementById('modal-unit');
-            if(m) { m.classList.remove('hidden'); document.getElementById('unit-title').focus(); }
+            playSound('click'); unitTargetInput = document.getElementById(inputId); initUnitGrid(); 
+            document.getElementById('modal-unit').classList.remove('hidden'); document.getElementById('unit-title').focus();
         };
-        window.closeUnitModal = () => { 
-            const m = document.getElementById('modal-unit');
-            if(m) m.classList.add('hidden'); 
-            if(unitTargetInput) unitTargetInput.focus(); 
-        };
-        safeListen('btn-pick-unit-add', 'click', () => openUnitPicker('add-unit'));
-        safeListen('btn-pick-unit-edit', 'click', () => openUnitPicker('edit-unit'));
+        window.closeUnitModal = () => { document.getElementById('modal-unit').classList.add('hidden'); if(unitTargetInput) unitTargetInput.focus(); };
+        document.getElementById('btn-pick-unit-add').addEventListener('click', () => openUnitPicker('add-unit'));
+        document.getElementById('btn-pick-unit-edit').addEventListener('click', () => openUnitPicker('edit-unit'));
 
         // Edit Execution
-        safeListen('form-edit', 'submit', async (e) => {
+        document.getElementById('form-edit').addEventListener('submit', async (e) => {
             e.preventDefault();
             const newQty = parseInt(document.getElementById('edit-quantity').value);
             const unitVal = document.getElementById('edit-unit').value;
@@ -1238,8 +646,7 @@ safeListen('room-family-select', 'change', async (e) => {
             modal.classList.remove('hidden');
             setTimeout(() => { const v = modal.querySelectorAll('button:not(.hidden)'); if(v.length > 0) v[0].focus(); }, 100);
         }
-        
-        safeListen('action-buttons-container', 'click', (e) => {
+        document.getElementById('action-buttons-container').addEventListener('click', (e) => {
             const btn = e.target.closest('button'); if (!btn) return;
             const act = btn.dataset.action;
             if (act === 'put') openQtyPicker("放入数量", (n) => handleUpdate(n));
@@ -1255,6 +662,7 @@ safeListen('room-family-select', 'change', async (e) => {
             const catSelect = document.getElementById('edit-category');
             catSelect.value = item.category || '其他杂项';
             if(catSelect.value === '') catSelect.value = '其他杂项';
+
             document.getElementById('edit-room').value = item.room;
             document.getElementById('edit-location').value = item.location;
             document.getElementById('edit-unit').value = item.unit || '个';
@@ -1263,66 +671,60 @@ safeListen('room-family-select', 'change', async (e) => {
             renderTags('edit-tags-container', 'edit-tags-input');
         }
 
-        // Qty Picker
+        // Qty Picker (Fixed Focus Logic)
         let qtyCallback = null;
         const qtyGrid = document.getElementById('qty-grid');
-        if(qtyGrid) {
-            qtyGrid.innerHTML = '';
-            for(let i=1; i<=10; i++) {
-                const btn = document.createElement('button'); btn.className = 'grid-btn'; btn.textContent = i;
-                const handler = (e) => { if(e.type === 'keydown' && e.key !== 'Enter') return; e.preventDefault(); e.stopPropagation(); submitQty(i); };
-                btn.addEventListener('click', handler); btn.addEventListener('keydown', handler); qtyGrid.appendChild(btn);
-            }
+        qtyGrid.innerHTML = '';
+        for(let i=1; i<=10; i++) {
+            const btn = document.createElement('button'); btn.className = 'grid-btn'; btn.textContent = i;
+            const handler = (e) => { if(e.type === 'keydown' && e.key !== 'Enter') return; e.preventDefault(); e.stopPropagation(); submitQty(i); };
+            btn.addEventListener('click', handler); btn.addEventListener('keydown', handler); qtyGrid.appendChild(btn);
         }
-
         function openQtyPicker(title, cb) {
             playSound('click'); qtyCallback = cb;
             document.getElementById('qty-title').textContent = title;
             document.getElementById('modal-action').classList.add('hidden'); document.getElementById('modal-qty').classList.remove('hidden');
             const input = document.getElementById('qty-custom-input'); const confirm = document.getElementById('btn-qty-confirm'); const trigger = document.getElementById('qty-custom-trigger');
             input.value = ''; input.disabled = true; confirm.disabled = true; confirm.classList.add('opacity-50'); confirm.setAttribute('tabindex', '-1'); trigger.setAttribute('tabindex', '0');
-            setTimeout(() => { if(qtyGrid && qtyGrid.firstChild) qtyGrid.firstChild.focus(); announce("请选择数量"); }, 100);
+            setTimeout(() => { qtyGrid.firstChild.focus(); announce("请选择数量"); }, 100);
         }
-        
         const customTrigger = document.getElementById('qty-custom-trigger');
         function activateInput() {
             const input = document.getElementById('qty-custom-input'); const confirm = document.getElementById('btn-qty-confirm'); const trigger = document.getElementById('qty-custom-trigger');
             trigger.setAttribute('tabindex', '-1'); input.disabled = false; input.focus(); confirm.disabled = false; confirm.classList.remove('opacity-50'); confirm.setAttribute('tabindex', '0'); announce("请输入数字");
         }
-        if(customTrigger) {
-            customTrigger.addEventListener('click', activateInput);
-            customTrigger.addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.keyCode === 13) { e.preventDefault(); e.stopPropagation(); activateInput(); } });
-        }
-        safeListen('qty-custom-input', 'keydown', (e) => { if(e.key === 'Enter' || e.keyCode === 13) { e.preventDefault(); e.stopPropagation(); submitQty(parseInt(e.target.value)); } });
-        safeListen('btn-qty-confirm', 'click', () => { submitQty(parseInt(document.getElementById('qty-custom-input').value)); });
+        customTrigger.addEventListener('click', activateInput);
+        customTrigger.addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.keyCode === 13) { e.preventDefault(); e.stopPropagation(); activateInput(); } });
+        document.getElementById('qty-custom-input').addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.keyCode === 13) { e.preventDefault(); e.stopPropagation(); submitQty(parseInt(e.target.value)); } });
+        document.getElementById('btn-qty-confirm').addEventListener('click', () => { submitQty(parseInt(document.getElementById('qty-custom-input').value)); });
         
         function submitQty(val) { 
             if (!val || val <= 0) { announce("无效数量"); return; } 
             if (qtyCallback) qtyCallback(val); 
             document.getElementById('modal-qty').classList.add('hidden');
+            
+            // 修复焦点 BUG 2: 在新增界面，焦点归还给触发器，而不是走通用的 closeModals
             if (currentScreen === 'add') {
-                const trigger = document.getElementById('btn-add-qty-trigger');
-                if(trigger) trigger.focus();
+                document.getElementById('btn-add-qty-trigger').focus();
             } else {
                 closeModals();
             }
         }
         
-        window.closeQtyModal = () => { 
+        function closeQtyModal() { 
             document.getElementById('modal-qty').classList.add('hidden'); 
+            // 修复焦点 BUG 2: 取消时同样处理
             if (currentScreen === 'add') {
-                const trigger = document.getElementById('btn-add-qty-trigger');
-                if(trigger) trigger.focus();
+                document.getElementById('btn-add-qty-trigger').focus();
             } else {
                 closeModals(); 
             }
-        };
+        }
 
         window.closeModals = () => {
             document.querySelectorAll('[id^="modal-"]').forEach(m => m.classList.add('hidden'));
             const containerId = (currentScreen === 'results') ? 'results-list' : (currentScreen === 'takeout' ? 'takeout-list' : 'home-list');
             const container = document.getElementById(containerId);
-            if(!container) return;
             if (currentActionItem && currentActionItem.id) {
                 const target = container.querySelector(`.item-card[data-id="${currentActionItem.id}"]`);
                 if (target) { target.focus(); return; }
@@ -1351,91 +753,66 @@ safeListen('room-family-select', 'change', async (e) => {
             document.getElementById('btn-zero-del').onclick = async () => { m.classList.add('hidden'); await execDelete(); };
             document.getElementById('btn-zero-cancel').onclick = () => { m.classList.add('hidden'); announce("已取消"); closeModals(); };
         }
-        
         let confirmCallback = null;
         function openGenericConfirm(msg, cb) {
-            document.getElementById('modal-action').classList.add('hidden'); 
-            const m = document.getElementById('modal-confirm'); 
-            playSound('error');
-            m.classList.remove('hidden'); 
-            document.getElementById('confirm-text').textContent = msg; 
-            confirmCallback = cb; 
-            setTimeout(() => document.getElementById('title-confirm').focus(), 100);
+            document.getElementById('modal-action').classList.add('hidden'); const m = document.getElementById('modal-confirm'); playSound('error');
+            m.classList.remove('hidden'); document.getElementById('confirm-text').textContent = msg; confirmCallback = cb; setTimeout(() => document.getElementById('title-confirm').focus(), 100);
         }
-        
-        safeListen('btn-confirm-ok', 'click', () => { 
-            if(confirmCallback) confirmCallback(); 
-            const m = document.getElementById('modal-confirm');
-            if(m) m.classList.add('hidden'); 
-        });
-        
-        // 修复：确保 closeModals 全局可用后再绑定
-        safeListen('btn-confirm-cancel', 'click', () => { if(window.closeModals) window.closeModals(); });
-        
+        document.getElementById('btn-confirm-ok').addEventListener('click', () => { if(confirmCallback) confirmCallback(); document.getElementById('modal-confirm').classList.add('hidden'); });
+        document.getElementById('btn-confirm-cancel').addEventListener('click', () => closeModals());
         async function execDelete() { try { await deleteDoc(doc(db, "items", currentActionItem.id)); announce("已删除"); closeModals(); } catch(e) { announce("删除失败"); } }
 
-// Global Keydown
+        // Export/Import
+        document.getElementById('btn-export').addEventListener('click', () => {
+            let csvContent = "\uFEFF物品名称,分类,标签,房间,具体位置,数量,单位\n"; 
+            allItems.forEach(item => { 
+                const tagsStr = (item.tags || []).join(';');
+                csvContent += `${item.name},${item.category},${tagsStr},${item.room},${item.location || ''},${item.quantity},${item.unit||'个'}\n`; 
+            });
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `物品备份_${new Date().toISOString().slice(0,10)}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); announce("导出成功");
+        });
+        document.getElementById('btn-download-template').addEventListener('click', () => {
+            const csvContent = "\uFEFF物品名称(必填),分类,标签(用分号隔开),房间(必填),具体位置,数量(数字),单位\n大米,食品饮料,粮食;主食,厨房,米桶,1,袋\n洗发水,个人护理,洗护;日常,卫生间,架子,1,瓶"; 
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `导入模板.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); announce("模板下载成功");
+        });
+        document.getElementById('btn-trigger-upload').addEventListener('click', () => document.getElementById('file-upload').click());
+        document.getElementById('file-upload').addEventListener('change', (e) => {
+            const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
+            reader.onload = async (e) => {
+                const text = e.target.result; const rows = text.split('\n'); let count = 0;
+                for (let i = 1; i < rows.length; i++) {
+                    const row = rows[i].trim(); if (!row) continue; const cols = row.split(','); if (cols.length < 1) continue; const name = cols[0]?.trim(); if(!name) continue;
+                    
+                    const cat = cols[1]?.trim() || '其他杂项';
+                    const tagStr = cols[2]?.trim() || '';
+                    const tags = tagStr ? tagStr.split(';').map(t => t.trim()).filter(t=>t) : [];
+
+                    await addDoc(itemsRef, { 
+                        name: name, 
+                        category: cat,
+                        tags: tags,
+                        room: cols[3]?.trim() || '客厅', 
+                        location: cols[4]?.trim() || '', 
+                        quantity: parseInt(cols[5]) || 1, 
+                        unit: cols[6]?.trim() || '个', 
+                        uid: auth.currentUser.uid, 
+                        updatedAt: serverTimestamp() 
+                    }); count++;
+                } announce(`导入 ${count} 个物品`); switchScreen('screen-home');
+            }; reader.readAsText(file);
+        });
+
+        // Global Keydown
         window.addEventListener('keydown', (e) => {
             if(e.key === 'Escape') {
-                // 1. 如果有弹窗（模态框）打开，先关闭弹窗
-                const activeModals = document.querySelectorAll('[id^="modal-"]:not(.hidden)');
-                const accountMenu = document.getElementById('menu-account-dropdown');
-                
-                if (!accountMenu.classList.contains('hidden')) {
-                    e.preventDefault(); 
-                    accountMenu.classList.add('hidden'); 
-                    document.getElementById('btn-account-menu').focus();
-                    return;
-                }
-
-                if (activeModals.length > 0) {
-                    e.preventDefault();
-                    closeModals();
-                    document.getElementById('modal-qty').classList.add('hidden');
-                    document.getElementById('modal-unit').classList.add('hidden');
-                    return;
-                }
-
-                // 2. 如果在“新增房间”或“删除房间”界面 -> 返回设置页的“房间管理”Tab
-                if (currentScreen === 'room-add' || currentScreen === 'room-del') {
-                    e.preventDefault();
-                    switchScreen('screen-settings');
-                    switchSettingsTab('tab-rooms');
-                    const tabBtn = document.getElementById('tab-rooms');
-                    if(tabBtn) tabBtn.focus();
-                    return;
-                }
-
-                // 3. 如果在“设置页”、“新增物品页”、“搜索结果页” -> 返回首页
-                if (currentScreen === 'settings' || currentScreen === 'add' || currentScreen === 'results') {
-                    e.preventDefault();
-                    switchScreen('screen-home');
-                    return;
-                }
-
-                // 4. 如果在“编辑页” -> 返回上一页（可能是首页，也可能是搜索结果页）
-                if (currentScreen === 'edit') {
-                    e.preventDefault();
-                    cancelEdit(); // 复用已有的取消编辑逻辑
-                    return;
-                }
-                
-                // 5. 特殊情况：如果在“取出模式”，按ESC返回“首页”
-                if (currentScreen === 'takeout') {
-                    e.preventDefault();
-                    switchScreen('screen-home');
-                    return;
-                }
-
-                // 6. 如果已经在首页，清除搜索框（如果有内容）
-                if (currentScreen === 'home') {
-                    const searchInput = document.getElementById('home-search');
-                    if (searchInput && searchInput.value) {
-                        e.preventDefault();
-                        searchInput.value = '';
-                        document.getElementById('btn-clear-home-search').classList.add('hidden');
-                        announce("已清除搜索");
-                    }
+                if (currentScreen === 'edit') return; 
+                const menu = document.getElementById('menu-account-dropdown');
+                if (!menu.classList.contains('hidden')) { e.preventDefault(); menu.classList.add('hidden'); document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false'); document.getElementById('btn-account-menu').focus(); return; }
+                const modals = document.querySelectorAll('[id^="modal-"]:not(.hidden)'); if (modals.length > 0) { e.preventDefault(); closeModals(); document.getElementById('modal-qty').classList.add('hidden'); document.getElementById('modal-unit').classList.add('hidden'); return; }
+                if (currentScreen !== 'home' && currentScreen !== 'login') { 
+                    document.getElementById('home-search').value = ''; document.getElementById('takeout-search').value = '';
+                    document.getElementById('btn-clear-home-search').classList.add('hidden'); document.getElementById('btn-clear-takeout-search').classList.add('hidden');
+                    e.preventDefault(); switchScreen('screen-home'); 
                 }
             }
         });

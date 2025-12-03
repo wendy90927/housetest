@@ -65,9 +65,6 @@
                         <span aria-hidden="true">▼</span>
                     </button>
                     <div id="menu-account-dropdown" class="hidden absolute top-full right-0 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 text-gray-900 z-50 flex flex-col">
-
-<button id="btn-open-settings" class="w-full text-left px-4 py-4 hover:bg-gray-100 font-bold border-b border-gray-200 text-blue-800">账户与家庭管理</button>
-
                         <button id="btn-clear-data" class="w-full text-left px-4 py-4 hover:bg-red-50 text-red-700 font-bold border-b border-gray-200">清空所有数据</button>
                         <button id="btn-delete-account" class="w-full text-left px-4 py-4 hover:bg-red-50 text-red-700 font-bold border-b border-gray-200">注销账号</button>
                         <button id="btn-logout" class="w-full text-left px-4 py-4 hover:bg-gray-100 font-bold text-gray-800">退出登录</button>
@@ -362,121 +359,6 @@
         </div>
     </div>
 
-<div id="screen-settings" class="screen hidden min-h-screen flex flex-col bg-gray-50">
-        <div class="bg-blue-800 text-white p-4 shadow-md sticky top-0 z-20">
-            <div class="max-w-3xl mx-auto flex items-center justify-between">
-                <button id="btn-back-settings" class="bg-white text-blue-900 px-6 py-2 rounded-lg font-bold border-2 border-blue-200">&lt; 返回</button>
-                <h1 id="title-settings" class="text-xl font-bold outline-none" tabindex="-1">账户与家庭管理</h1>
-            </div>
-        </div>
-
-        <div class="bg-white border-b border-gray-200">
-            <div class="max-w-3xl mx-auto flex" role="tablist" aria-label="设置选项卡">
-<button id="tab-profile" role="tab" aria-selected="true" aria-controls="panel-profile" class="flex-1 py-4 text-blue-800 border-b-4 border-blue-800 font-bold text-lg focus:outline-none focus:bg-blue-50">个人资料</button>
-                <button id="tab-rooms" role="tab" aria-selected="false" aria-controls="panel-rooms" class="flex-1 py-4 text-gray-600 font-bold text-lg hover:bg-gray-50 focus:outline-none focus:bg-gray-100">房间管理</button>
-            </div>
-        </div>
-
-        <div class="max-w-3xl mx-auto w-full p-4 flex-grow overflow-y-auto">
-            
-<div id="panel-profile" role="tabpanel" tabindex="0" aria-labelledby="tab-profile">
-                <div class="bg-white p-6 rounded-lg shadow space-y-6">
-                    <div>
-                        <label for="set-nickname" class="block font-bold mb-2 text-lg">昵称</label>
-                        <input type="text" id="set-nickname" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg">
-                    </div>
-                    
-                    <div>
-                        <label for="set-identity-select" class="block font-bold mb-2 text-lg">家庭身份</label>
-                        <select id="set-identity-select" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg bg-white text-black">
-                            <option value="爸爸">爸爸</option>
-                            <option value="妈妈">妈妈</option>
-                            <option value="儿子">儿子</option>
-                            <option value="女儿">女儿</option>
-                            <option value="老人">老人</option>
-                            <option value="自定义">自定义 (手动输入)</option>
-                        </select>
-                        
-                        <div id="box-identity-custom" class="hidden mt-3">
-                            <label for="set-identity-custom" class="block font-bold mb-2 text-gray-700">请输入自定义身份：</label>
-                            <input type="text" id="set-identity-custom" class="w-full p-3 border-2 border-blue-300 rounded-lg text-lg" placeholder="例如：二姨">
-                        </div>
-                    </div>
-
-                    <div class="border-t pt-4 mt-4">
-                        <h3 class="font-bold text-lg mb-4">安全设置</h3>
-                        <button id="btn-open-password-modal" class="w-full py-4 bg-gray-100 text-blue-800 font-bold rounded-lg border-2 border-blue-200 hover:bg-gray-200 text-left px-4 flex justify-between items-center">
-                            <span>修改登录密码</span>
-                            <span class="text-sm text-gray-500" aria-hidden="true">></span>
-                        </button>
-                    </div>
-
-                    <div class="flex gap-4 mt-6">
-<button id="btn-save-profile" class="flex-1 bg-blue-600 text-white p-4 rounded-lg font-bold text-xl hover:bg-blue-700 shadow-lg">保存资料</button>
-                        <button id="btn-profile-cancel" class="flex-1 bg-gray-200 text-gray-800 p-4 rounded-lg font-bold text-xl border-2 border-gray-300 hover:bg-gray-300">取消</button>
-                    </div>
-                </div>
-            </div>
-
-<div id="panel-rooms" role="tabpanel" tabindex="0" aria-labelledby="tab-rooms" class="hidden">
-                <div class="bg-white p-6 rounded-lg shadow space-y-6">
-                    <p class="text-gray-600 font-bold text-lg">在此管理您的房间列表（支持自定义添加和删除）。</p>
-                    
-                    <div class="flex flex-col gap-4">
-                        <button id="btn-to-room-add" class="w-full py-6 bg-blue-50 text-blue-900 border-2 border-blue-300 rounded-xl font-bold text-2xl shadow-sm hover:bg-blue-100 flex items-center justify-center gap-2">
-                            <span>+ 新增房间</span>
-                        </button>
-                        
-                        <button id="btn-to-room-del" class="w-full py-6 bg-red-50 text-red-900 border-2 border-red-300 rounded-xl font-bold text-2xl shadow-sm hover:bg-red-100 flex items-center justify-center gap-2">
-                            <span>- 删除房间</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-    </div>
-
-<div id="screen-room-add" class="screen hidden min-h-screen flex flex-col bg-gray-50">
-        <div class="bg-blue-800 text-white p-4 shadow-md sticky top-0 z-20">
-            <h1 class="text-xl font-bold text-center outline-none" tabindex="-1">新增房间</h1>
-        </div>
-        <div class="max-w-3xl mx-auto w-full p-4 flex-grow overflow-y-auto">
-            <div class="bg-white p-6 rounded-lg shadow mb-6">
-                <h2 class="font-bold text-xl mb-4">方式一：从常用列表中选择</h2>
-                <p class="text-gray-600 mb-2">使用上下键浏览，空格键勾选 (支持多选)</p>
-<div id="preset-room-list" class="flex flex-col gap-2 max-h-80 overflow-y-auto" role="group" aria-label="常用房间列表，使用上下键浏览，空格键选中"></div>
-            </div>
-
-            <div class="bg-white p-6 rounded-lg shadow mb-6">
-                <h2 class="font-bold text-xl mb-4">方式二：手动输入</h2>
-                <label for="input-custom-room" class="block font-bold mb-2 text-lg">房间名称</label>
-                <input type="text" id="input-custom-room" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" placeholder="例如：阁楼">
-            </div>
-
-            <div class="flex gap-4">
-                <button id="btn-confirm-add-rooms" class="flex-1 bg-blue-600 text-white p-4 rounded-lg font-bold text-xl shadow hover:bg-blue-700">保存并返回</button>
-                <button id="btn-back-from-add-room" class="flex-1 bg-gray-200 text-gray-800 p-4 rounded-lg font-bold text-xl hover:bg-gray-300">取消</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="screen-room-del" class="screen hidden min-h-screen flex flex-col bg-gray-50">
-        <div class="bg-red-800 text-white p-4 shadow-md sticky top-0 z-20">
-            <h1 class="text-xl font-bold text-center outline-none" tabindex="-1">删除房间</h1>
-        </div>
-        <div class="max-w-3xl mx-auto w-full p-4 flex-grow overflow-y-auto">
-<p class="font-bold text-lg mb-4 text-gray-700">请勾选要删除的房间，然后点击保存：</p>
-            
-            <div id="list-delete-rooms" class="flex flex-col gap-2 max-h-80 overflow-y-auto mb-6" role="group" aria-label="待删除房间列表">
-                </div>
-            
-            <div class="flex gap-4 mt-4">
-                <button id="btn-confirm-del-rooms" class="flex-1 bg-red-600 text-white p-4 rounded-lg font-bold text-xl shadow hover:bg-red-700">保存并删除</button>
-                <button id="btn-back-from-del-room" class="flex-1 bg-gray-200 text-gray-800 p-4 rounded-lg font-bold text-xl hover:bg-gray-300">取消</button>
-            </div>
-    </div>
-
     <div id="modal-forgot" class="hidden fixed inset-0 bg-black bg-opacity-70 z-50 flex justify-center items-center">
         <div class="bg-white w-full max-w-sm p-6 rounded-2xl shadow-2xl text-center border-4 border-gray-300" role="dialog" aria-modal="true" aria-labelledby="title-forgot">
             <h2 id="title-forgot" class="text-2xl font-bold mb-4 outline-none" tabindex="-1">找回密码</h2>
@@ -550,27 +432,6 @@
             </div>
         </div>
     </div>
-
-<div id="modal-change-pass" class="hidden fixed inset-0 bg-black bg-opacity-70 z-50 flex justify-center items-center">
-        <div class="bg-white w-full max-w-sm p-6 rounded-2xl shadow-2xl text-center border-4 border-blue-300" role="dialog" aria-modal="true" aria-labelledby="title-change-pass">
-            <h2 id="title-change-pass" class="text-2xl font-bold mb-4 outline-none" tabindex="-1">修改登录密码</h2>
-            <div class="text-left space-y-4">
-                <div>
-                    <label for="input-new-pass" class="block font-bold mb-1">新密码 (至少6位)</label>
-                    <input type="password" id="input-new-pass" class="w-full p-3 border-2 border-gray-300 rounded-lg" placeholder="新密码">
-                </div>
-                <div>
-                    <label for="input-confirm-pass" class="block font-bold mb-1">确认新密码</label>
-                    <input type="password" id="input-confirm-pass" class="w-full p-3 border-2 border-gray-300 rounded-lg" placeholder="再次输入">
-                </div>
-            </div>
-            <div class="flex gap-4 mt-6">
-                <button id="btn-pass-cancel" class="flex-1 p-3 bg-gray-200 font-bold rounded-lg text-lg">取消</button>
-                <button id="btn-pass-save" class="flex-1 p-3 bg-blue-600 text-white font-bold rounded-lg text-lg">确认修改</button>
-            </div>
-        </div>
-    </div>
-
 <script type="module" src="script.js"></script>
 </body>
 </html>
