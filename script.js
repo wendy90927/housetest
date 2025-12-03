@@ -161,9 +161,13 @@ else if (screenId === 'screen-settings') currentScreen = 'settings';
 
         // --- Auth & Init ---
         onAuthStateChanged(auth, user => {
-            if (user) {
-                document.getElementById('btn-account-menu').setAttribute('aria-label', `当前账号：${user.email}，点击展开菜单`);
-                document.getElementById('user-email-display').textContent = user.email.split('@')[0];
+if (user) {
+                // 优化朗读：优先显示昵称，并去除“点击展开菜单”冗余提示
+                const nickName = user.displayName || '未设置昵称';
+                const labelText = `当前账号：${nickName}，${user.email}`;
+                
+                document.getElementById('btn-account-menu').setAttribute('aria-label', labelText);
+                document.getElementById('user-email-display').textContent = nickName;
                 switchScreen('screen-home');
                 setupDataListener(user.uid);
             } else {
@@ -188,6 +192,28 @@ else if (screenId === 'screen-settings') currentScreen = 'settings';
         
         const btnAccount = document.getElementById('btn-account-menu');
         const menuAccount = document.getElementById('menu-account-dropdown');
+// 菜单键盘导航：上下键切换，Tab键关闭
+        menuAccount.addEventListener('keydown', (e) => {
+            const buttons = Array.from(menuAccount.querySelectorAll('button'));
+            const idx = buttons.indexOf(document.activeElement);
+
+            if (e.key === 'Tab') {
+                // 按下 Tab 时，允许默认行为（焦点移出），但在下一帧关闭菜单
+                setTimeout(() => {
+                    menuAccount.classList.add('hidden');
+                    document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false');
+                }, 0);
+                return;
+            }
+
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault(); // 阻止页面滚动
+                let nextIdx = 0;
+                if (e.key === 'ArrowDown') nextIdx = (idx + 1) % buttons.length;
+                if (e.key === 'ArrowUp') nextIdx = (idx - 1 + buttons.length) % buttons.length;
+                buttons[nextIdx].focus();
+            }
+        });
         btnAccount.addEventListener('click', (e) => {
             e.stopPropagation(); playSound('click');
             menuAccount.classList.toggle('hidden');
@@ -858,12 +884,33 @@ else if (screenId === 'screen-settings') currentScreen = 'settings';
             });
         });
 
-        // 个人资料保存 (模拟)
+// 个人资料保存
         document.getElementById('form-profile').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const nick = document.getElementById('set-nickname').value;
-            // 这里我们暂时只打印，后续会连接 Firebase Profile 更新
-            announce("设置已保存 (模拟)");
+            const nick = document.getElementById('set-nickname').value.trim();
+            if(!nick) { announce("昵称不能为空"); return; }
+            
+            // 模拟更新：立即更新首页右上角的读屏标签和显示文字
+            const currentUser = auth.currentUser;
+            if (currentUser) {
+                const labelText = `当前账号：${nick}，${currentUser.email}`;
+                document.getElementById('btn-account-menu').setAttribute('aria-label', labelText);
+                document.getElementById('user-email-display').textContent = nick;
+            }
+
+            announce(`设置已保存，昵称更新为 ${nick}`);
+            switchScreen('screen-home');
+        });
+
+        // 取消按钮逻辑
+        document.getElementById('btn-cancel-profile').addEventListener('click', () => {
+            announce("已取消");
+            switchScreen('screen-home');
+        });
+
+        document.getElementById('btn-cancel-pwd').addEventListener('click', () => {
+            announce("已取消");
+            switchScreen('screen-settings');
         });
 
         // 修改密码跳转
