@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>家庭物品管家V1.9</title>
+    <title>家庭物品管家V1.91</title>
     <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -467,10 +467,27 @@
                 </form>
             </div>
 
-            <div id="panel-rooms" role="tabpanel" aria-labelledby="tab-rooms" class="hidden" tabindex="0">
-                <div class="p-8 text-center bg-gray-50 rounded-xl border-2 border-gray-200">
-                    <p class="text-xl text-gray-600 font-bold">房间管理功能开发中...</p>
-                    <p class="text-gray-500 mt-2">在这里您可以添加、删除或重命名家里的房间。</p>
+<div id="panel-rooms" role="tabpanel" aria-labelledby="tab-rooms" class="hidden" tabindex="0">
+                <div class="flex flex-col gap-4 p-4">
+                    <p class="text-gray-600 mb-2 font-bold" id="room-manage-hint">管理您的家庭空间布局。</p>
+                    
+                    <button id="btn-to-add-room" class="w-full p-6 bg-green-50 text-green-800 font-bold rounded-xl border-2 border-green-300 text-left text-xl shadow-sm hover:bg-green-100 flex justify-between items-center">
+                        <span>+ 新增房间</span>
+                        <span class="text-sm bg-green-200 px-2 py-1 rounded text-green-900">推荐</span>
+                    </button>
+
+                    <button id="btn-to-delete-room" class="w-full p-6 bg-red-50 text-red-800 font-bold rounded-xl border-2 border-red-300 text-left text-xl shadow-sm hover:bg-red-100 flex justify-between items-center">
+                        <span>- 删除房间</span>
+                        <span class="text-sm text-red-600">谨慎操作</span>
+                    </button>
+
+                    <div class="mt-8 border-t pt-4">
+                         <p class="font-bold text-lg mb-4">当前操作提示：</p>
+                         <ul class="list-disc pl-5 text-gray-700 space-y-2">
+                             <li>新增房间：可从系统推荐列表中选择，或自定义输入。</li>
+                             <li>删除房间：删除后，原房间内的物品将被标记为“位置未知”。</li>
+                         </ul>
+                    </div>
                 </div>
             </div>
         </div>
@@ -502,6 +519,52 @@
             </form>
         </div>
     </div>
+
+<div id="screen-room-add" class="screen hidden min-h-screen flex flex-col bg-white">
+        <div class="bg-green-600 text-white p-4 shadow-md sticky top-0 z-20">
+            <div class="max-w-3xl mx-auto flex items-center justify-between">
+                <button id="btn-back-room-add" class="bg-white text-green-700 px-6 py-2 rounded-lg font-bold border-2 border-green-200">&lt; 返回设置</button>
+                <h1 id="title-room-add" class="text-xl font-bold outline-none" tabindex="-1">新增房间</h1>
+            </div>
+        </div>
+        
+        <div class="max-w-lg mx-auto w-full p-6 overflow-y-auto pb-20">
+            <p class="font-bold text-lg mb-4" id="label-sys-rooms">1. 从推荐列表中选择 (上下键浏览，空格选中)：</p>
+            
+            <div id="list-room-recommend" class="flex flex-col gap-3 mb-8" role="group" aria-labelledby="label-sys-rooms">
+                </div>
+
+            <p class="font-bold text-lg mb-2" id="label-custom-room">2. 或输入自定义房间名：</p>
+            <input type="text" id="input-custom-room" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl mb-8" placeholder="例如：影音室" aria-labelledby="label-custom-room">
+
+            <div class="flex flex-col gap-4">
+                <button id="btn-save-room-add" class="w-full bg-green-600 hover:bg-green-700 text-white p-5 rounded-lg font-bold text-2xl shadow-lg">保存并添加</button>
+                <button id="btn-cancel-room-add" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 p-4 rounded-lg font-bold text-xl border-2 border-gray-300">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="screen-room-delete" class="screen hidden min-h-screen flex flex-col bg-white">
+        <div class="bg-red-600 text-white p-4 shadow-md sticky top-0 z-20">
+            <div class="max-w-3xl mx-auto flex items-center justify-between">
+                <button id="btn-back-room-del" class="bg-white text-red-700 px-6 py-2 rounded-lg font-bold border-2 border-red-200">&lt; 返回设置</button>
+                <h1 id="title-room-del" class="text-xl font-bold outline-none" tabindex="-1">删除房间</h1>
+            </div>
+        </div>
+
+        <div class="max-w-lg mx-auto w-full p-6 overflow-y-auto pb-20">
+            <p class="font-bold text-lg mb-4 text-red-700">请选择要删除的房间 (谨慎操作)：</p>
+            
+            <div id="list-room-existing" class="flex flex-col gap-3 mb-8" role="group" aria-label="已有房间列表，上下键浏览，空格选中">
+                </div>
+
+            <div class="flex flex-col gap-4">
+                <button id="btn-confirm-del-room" class="w-full bg-red-600 hover:bg-red-700 text-white p-5 rounded-lg font-bold text-2xl shadow-lg">确认删除选中房间</button>
+                <button id="btn-cancel-room-del" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 p-4 rounded-lg font-bold text-xl border-2 border-gray-300">取消</button>
+            </div>
+        </div>
+    </div>
+
 <script type="module" src="script.js"></script>
 </body>
 </html>

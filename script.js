@@ -33,6 +33,32 @@
 
         // 标签暂存
         let pendingTags = []; 
+// --- Room Management State ---
+        const SYSTEM_ROOMS = ['客厅', '卧室', '次卧', '书房', '餐厅', '卫生间', '厨房', '阳台', '洗衣房', '衣帽间', '阁楼', '地下室', '仓库', '车库'];
+        let userRooms = JSON.parse(localStorage.getItem('user_rooms') || '[]');
+        if (userRooms.length === 0) userRooms = ['客厅', '厨房', '卧室', '卫生间']; // 默认初始房间
+        let currentFamilyName = localStorage.getItem('family_name') || '我的家庭';
+
+        // 同步更新所有下拉菜单
+        function updateRoomSelects() {
+            const optionsHtml = userRooms.map(r => `<option value="${r}">${r}</option>`).join('');
+            const selects = ['home-filter', 'takeout-filter', 'add-room', 'edit-room'];
+            selects.forEach(id => {
+                const el = document.getElementById(id);
+                if(el) {
+                    const currentVal = el.value;
+                    // 对于过滤器，保留"全部"选项
+                    if(id.includes('filter')) {
+                        el.innerHTML = `<option value="all">全部房间</option>` + optionsHtml;
+                    } else {
+                        el.innerHTML = optionsHtml;
+                    }
+                    if(currentVal && userRooms.includes(currentVal)) el.value = currentVal;
+                }
+            });
+        }
+        // 初始化执行一次
+        setTimeout(updateRoomSelects, 500);
 
         // 自动推断规则
         const INFERENCE_RULES = {
@@ -162,12 +188,13 @@ else if (screenId === 'screen-settings') currentScreen = 'settings';
         // --- Auth & Init ---
         onAuthStateChanged(auth, user => {
 if (user) {
-                // 优化朗读：优先显示昵称，并去除“点击展开菜单”冗余提示
+// 优化朗读：加入家庭名称
                 const nickName = user.displayName || '未设置昵称';
-                const labelText = `当前账号：${nickName}，${user.email}`;
+                const labelText = `当前账号：${nickName}，所属家庭：${currentFamilyName}，${user.email}`;
                 
                 document.getElementById('btn-account-menu').setAttribute('aria-label', labelText);
                 document.getElementById('user-email-display').textContent = nickName;
+                document.getElementById('set-family-name').value = currentFamilyName; // 设置页回显
                 switchScreen('screen-home');
                 setupDataListener(user.uid);
             } else {
@@ -886,19 +913,26 @@ if (user) {
 
 // 个人资料保存
         document.getElementById('form-profile').addEventListener('submit', async (e) => {
-            e.preventDefault();
+e.preventDefault();
             const nick = document.getElementById('set-nickname').value.trim();
+            const fam = document.getElementById('set-family-name').value.trim();
             if(!nick) { announce("昵称不能为空"); return; }
             
-            // 模拟更新：立即更新首页右上角的读屏标签和显示文字
+            // 保存家庭名称
+            if(fam) {
+                currentFamilyName = fam;
+                localStorage.setItem('family_name', fam);
+            }
+
+            // 更新首页读屏
             const currentUser = auth.currentUser;
             if (currentUser) {
-                const labelText = `当前账号：${nick}，${currentUser.email}`;
+                const labelText = `当前账号：${nick}，所属家庭：${currentFamilyName}，${currentUser.email}`;
                 document.getElementById('btn-account-menu').setAttribute('aria-label', labelText);
                 document.getElementById('user-email-display').textContent = nick;
             }
 
-            announce(`设置已保存，昵称更新为 ${nick}`);
+            announce(`设置已保存，昵称更新为 ${nick}，家庭名称更新为 ${currentFamilyName}`);
             switchScreen('screen-home');
         });
 
@@ -916,6 +950,152 @@ if (user) {
         // 修改密码跳转
         document.getElementById('btn-to-change-pwd').addEventListener('click', () => switchScreen('screen-change-pwd'));
         document.getElementById('btn-back-pwd').addEventListener('click', () => switchScreen('screen-settings'));
+// --- Room Management Logic ---
+        
+        // 核心引擎：渲染支持键盘漫游的复选框列表
+        function renderAccessibleCheckboxes(containerId, items, onEnterKey) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            
+            items.forEach((item, index) => {
+                // 包装器：相对定位，用于容纳原生 input
+                const wrapper = document.createElement('div');
+                wrapper.className = "relative flex items-center p-4 border-2 border-gray-200 rounded-lg hover:bg-gray-50 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-200 transition-all cursor-pointer mb-2";
+                
+                // 原生 Input：透明覆盖，接管语义和点击
+                // 只有第一个元素 tabindex=0，其他为 -1 (漫游起点)
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.className = "opacity-0 absolute inset-0 w-full h-full cursor-pointer";
+                input.value = item;
+                input.tabIndex = index === 0 ? 0 : -1; 
+                input.setAttribute('aria-label', item); 
+
+                // 视觉呈现文本
+                const label = document.createElement('span');
+                label.className = "text-xl font-bold text-gray-700 ml-2 pointer-events-none";
+                label.textContent = item;
+
+                // 选中状态视觉同步
+                input.addEventListener('change', () => {
+                    if(input.checked) {
+                        wrapper.classList.add('bg-blue-50', 'border-blue-500');
+                        label.classList.add('text-blue-900');
+                    } else {
+                        wrapper.classList.remove('bg-blue-50', 'border-blue-500');
+                        label.classList.remove('text-blue-900');
+                    }
+                    playSound('click');
+                });
+
+                // 键盘漫游逻辑 (Up/Down)
+                input.addEventListener('keydown', (e) => {
+                    const inputs = container.querySelectorAll('input');
+                    const currIndex = Array.from(inputs).indexOf(e.target);
+                    let nextIndex = null;
+
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        nextIndex = (currIndex + 1) % inputs.length;
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        nextIndex = (currIndex - 1 + inputs.length) % inputs.length;
+                    } else if (e.key === 'Enter') {
+                        // 回车默认切换选中，但也可能触发保存，视需求而定
+                        // 这里默认原生行为即可(空格切换)，无需额外阻止
+                    }
+
+                    if (nextIndex !== null) {
+                        inputs[currIndex].tabIndex = -1;
+                        inputs[nextIndex].tabIndex = 0;
+                        inputs[nextIndex].focus();
+                        playSound('click'); // 移动时的音效
+                    }
+                });
+
+                wrapper.appendChild(input);
+                wrapper.appendChild(label);
+                container.appendChild(wrapper);
+            });
+        }
+
+        // 打开新增房间页
+        document.getElementById('btn-to-add-room').addEventListener('click', () => {
+            switchScreen('screen-room-add');
+            // 计算推荐列表：系统列表 - 已有列表
+            const recommend = SYSTEM_ROOMS.filter(r => !userRooms.includes(r));
+            
+            if(recommend.length === 0) {
+                document.getElementById('list-room-recommend').innerHTML = '<p class="text-gray-500 font-bold">暂无推荐房间，请直接自定义。</p>';
+            } else {
+                renderAccessibleCheckboxes('list-room-recommend', recommend);
+            }
+            document.getElementById('input-custom-room').value = '';
+        });
+
+        document.getElementById('btn-back-room-add').addEventListener('click', () => switchScreen('screen-settings'));
+        document.getElementById('btn-cancel-room-add').addEventListener('click', () => { announce("已取消"); switchScreen('screen-settings'); });
+
+        // 保存新增房间
+        document.getElementById('btn-save-room-add').addEventListener('click', () => {
+            let addedCount = 0;
+            // 1. 获取选中的推荐房间
+            const container = document.getElementById('list-room-recommend');
+            const inputs = container.querySelectorAll('input[type="checkbox"]:checked');
+            inputs.forEach(input => {
+                userRooms.push(input.value);
+                addedCount++;
+            });
+
+            // 2. 获取自定义房间
+            const custom = document.getElementById('input-custom-room').value.trim();
+            if (custom) {
+                if (userRooms.includes(custom)) {
+                    announce(`房间 ${custom} 已存在`);
+                } else {
+                    userRooms.push(custom);
+                    addedCount++;
+                }
+            }
+
+            if (addedCount > 0) {
+                localStorage.setItem('user_rooms', JSON.stringify(userRooms));
+                updateRoomSelects(); // 刷新全局下拉菜单
+                announce(`成功添加 ${addedCount} 个房间`);
+                switchScreen('screen-settings');
+            } else {
+                announce("未选择或输入任何新房间");
+            }
+        });
+
+        // 打开删除房间页
+        document.getElementById('btn-to-delete-room').addEventListener('click', () => {
+            switchScreen('screen-room-delete');
+            renderAccessibleCheckboxes('list-room-existing', userRooms);
+        });
+
+        document.getElementById('btn-back-room-del').addEventListener('click', () => switchScreen('screen-settings'));
+        document.getElementById('btn-cancel-room-del').addEventListener('click', () => { announce("已取消"); switchScreen('screen-settings'); });
+
+        // 确认删除房间
+        document.getElementById('btn-confirm-del-room').addEventListener('click', () => {
+            const container = document.getElementById('list-room-existing');
+            const inputs = container.querySelectorAll('input[type="checkbox"]:checked');
+            const toDelete = Array.from(inputs).map(i => i.value);
+
+            if (toDelete.length === 0) {
+                announce("请先选择要删除的房间");
+                return;
+            }
+
+            openGenericConfirm(`确定删除这 ${toDelete.length} 个房间吗？`, () => {
+                userRooms = userRooms.filter(r => !toDelete.includes(r));
+                localStorage.setItem('user_rooms', JSON.stringify(userRooms));
+                updateRoomSelects(); // 刷新全局下拉菜单
+                announce("房间已删除");
+                switchScreen('screen-settings');
+            });
+        });
         
         // 修改密码逻辑 (需要 Firebase EmailAuthCredential re-auth，这里先做基础结构)
         document.getElementById('form-change-pwd').addEventListener('submit', (e) => {
