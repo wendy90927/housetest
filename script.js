@@ -144,6 +144,8 @@
             else if (screenId === 'screen-results') currentScreen = 'results';
             else if (screenId === 'screen-edit') currentScreen = 'edit';
             else if (screenId === 'screen-add') currentScreen = 'add';
+else if (screenId === 'screen-settings') currentScreen = 'settings';
+            else if (screenId === 'screen-change-pwd') currentScreen = 'change-pwd';
             else currentScreen = 'other';
             
             if (!focusTargetId) {
@@ -800,6 +802,84 @@
                     }); count++;
                 } announce(`导入 ${count} 个物品`); switchScreen('screen-home');
             }; reader.readAsText(file);
+        });
+
+// --- Settings & Tabs Logic ---
+        document.getElementById('btn-settings').addEventListener('click', () => {
+            document.getElementById('menu-account-dropdown').classList.add('hidden');
+            document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false');
+            switchScreen('screen-settings');
+            // 默认加载个人资料
+            // TODO: 这里后续需要回显用户真实数据
+            document.getElementById('set-nickname').value = auth.currentUser.displayName || '';
+        });
+        document.getElementById('btn-back-settings').addEventListener('click', () => switchScreen('screen-home'));
+
+        // Tab 切换核心逻辑 (支持箭头键)
+        const tabs = [document.getElementById('tab-profile'), document.getElementById('tab-rooms')];
+        const panels = [document.getElementById('panel-profile'), document.getElementById('panel-rooms')];
+
+        function activateTab(index) {
+            tabs.forEach((tab, i) => {
+                const isSelected = (i === index);
+                tab.setAttribute('aria-selected', isSelected);
+                tab.setAttribute('tabindex', isSelected ? '0' : '-1');
+                // 样式切换
+                if(isSelected) {
+                    tab.classList.add('border-blue-600', 'text-blue-800', 'bg-blue-50');
+                    tab.classList.remove('border-transparent', 'text-gray-600');
+                } else {
+                    tab.classList.remove('border-blue-600', 'text-blue-800', 'bg-blue-50');
+                    tab.classList.add('border-transparent', 'text-gray-600');
+                }
+                
+                if(isSelected) {
+                    panels[i].classList.remove('hidden');
+                } else {
+                    panels[i].classList.add('hidden');
+                }
+            });
+            tabs[index].focus();
+        }
+
+        tabs.forEach((tab, index) => {
+            tab.addEventListener('click', () => activateTab(index));
+            tab.addEventListener('keydown', (e) => {
+                let newIndex = index;
+                if (e.key === 'ArrowRight') {
+                    newIndex = (index + 1) % tabs.length;
+                    e.preventDefault();
+                    activateTab(newIndex);
+                } else if (e.key === 'ArrowLeft') {
+                    newIndex = (index - 1 + tabs.length) % tabs.length;
+                    e.preventDefault();
+                    activateTab(newIndex);
+                }
+            });
+        });
+
+        // 个人资料保存 (模拟)
+        document.getElementById('form-profile').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const nick = document.getElementById('set-nickname').value;
+            // 这里我们暂时只打印，后续会连接 Firebase Profile 更新
+            announce("设置已保存 (模拟)");
+        });
+
+        // 修改密码跳转
+        document.getElementById('btn-to-change-pwd').addEventListener('click', () => switchScreen('screen-change-pwd'));
+        document.getElementById('btn-back-pwd').addEventListener('click', () => switchScreen('screen-settings'));
+        
+        // 修改密码逻辑 (需要 Firebase EmailAuthCredential re-auth，这里先做基础结构)
+        document.getElementById('form-change-pwd').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const p1 = document.getElementById('pwd-new').value;
+            const p2 = document.getElementById('pwd-confirm').value;
+            if(p1 !== p2) { announce("两次密码不一致"); return; }
+            if(p1.length < 6) { announce("密码太短"); return; }
+            // 真实修改密码需要 updatePassword(user, newPassword)
+            // 但通常需要先重新认证。这里先留接口。
+            alert("为了安全，修改密码功能将在下个版本完善重新认证逻辑。");
         });
 
         // Global Keydown

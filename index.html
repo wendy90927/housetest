@@ -65,6 +65,7 @@
                         <span aria-hidden="true">▼</span>
                     </button>
                     <div id="menu-account-dropdown" class="hidden absolute top-full right-0 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 text-gray-900 z-50 flex flex-col">
+<button id="btn-settings" class="w-full text-left px-4 py-4 hover:bg-gray-100 font-bold text-blue-800 border-b border-gray-200">账号与家庭设置</button>
                         <button id="btn-clear-data" class="w-full text-left px-4 py-4 hover:bg-red-50 text-red-700 font-bold border-b border-gray-200">清空所有数据</button>
                         <button id="btn-delete-account" class="w-full text-left px-4 py-4 hover:bg-red-50 text-red-700 font-bold border-b border-gray-200">注销账号</button>
                         <button id="btn-logout" class="w-full text-left px-4 py-4 hover:bg-gray-100 font-bold text-gray-800">退出登录</button>
@@ -430,6 +431,73 @@
                 <button id="btn-confirm-cancel" class="flex-1 p-4 bg-gray-200 rounded-xl font-bold text-lg" onclick="closeModals()">取消</button>
                 <button id="btn-confirm-ok" class="flex-1 p-4 bg-red-600 text-white rounded-xl font-bold text-lg shadow">确认执行</button>
             </div>
+        </div>
+    </div>
+<div id="screen-settings" class="screen hidden min-h-screen flex flex-col bg-white">
+        <div class="bg-blue-800 text-white p-4 shadow-md sticky top-0 z-20">
+            <div class="max-w-3xl mx-auto flex items-center justify-between">
+                <button id="btn-back-settings" class="bg-white text-blue-800 px-6 py-2 rounded-lg font-bold border-2 border-blue-200">&lt; 返回首页</button>
+                <h1 id="title-settings" class="text-xl font-bold outline-none" tabindex="-1">账号与家庭设置</h1>
+            </div>
+        </div>
+        
+        <div class="max-w-3xl mx-auto w-full p-4">
+            <div role="tablist" aria-label="设置选项卡" class="flex border-b-4 border-gray-200 mb-6">
+                <button id="tab-profile" role="tab" aria-selected="true" aria-controls="panel-profile" class="flex-1 p-4 font-bold text-xl border-b-4 border-blue-600 text-blue-800 bg-blue-50 focus:bg-blue-100">个人资料</button>
+                <button id="tab-rooms" role="tab" aria-selected="false" aria-controls="panel-rooms" tabindex="-1" class="flex-1 p-4 font-bold text-xl border-b-4 border-transparent text-gray-600 hover:bg-gray-50 focus:bg-gray-100">房间管理</button>
+            </div>
+
+            <div id="panel-profile" role="tabpanel" aria-labelledby="tab-profile" tabindex="0">
+                <form id="form-profile" class="space-y-6">
+                    <div>
+                        <label for="set-nickname" class="block font-bold mb-2 text-xl">我的昵称</label>
+                        <input type="text" id="set-nickname" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" placeholder="例如：妈妈" aria-label="我的昵称">
+                    </div>
+                    <div>
+                        <label for="set-family-name" class="block font-bold mb-2 text-xl">家庭名称</label>
+                        <input type="text" id="set-family-name" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" placeholder="例如：幸福之家" aria-label="家庭名称">
+                    </div>
+                    <hr class="border-gray-200 my-4">
+                    <button type="button" id="btn-to-change-pwd" class="w-full p-4 bg-gray-100 text-blue-800 font-bold rounded-lg text-xl border-2 border-gray-300 text-left hover:bg-gray-200">修改登录密码 &gt;</button>
+                    
+                    <div class="flex flex-col gap-4 mt-8">
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white p-5 rounded-lg font-bold text-2xl shadow-lg">保存设置</button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="panel-rooms" role="tabpanel" aria-labelledby="tab-rooms" class="hidden" tabindex="0">
+                <div class="p-8 text-center bg-gray-50 rounded-xl border-2 border-gray-200">
+                    <p class="text-xl text-gray-600 font-bold">房间管理功能开发中...</p>
+                    <p class="text-gray-500 mt-2">在这里您可以添加、删除或重命名家里的房间。</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="screen-change-pwd" class="screen hidden min-h-screen flex flex-col bg-white">
+        <div class="bg-gray-800 text-white p-4 shadow-md sticky top-0 z-20">
+            <div class="max-w-3xl mx-auto flex items-center justify-between">
+                <button id="btn-back-pwd" class="bg-white text-gray-800 px-6 py-2 rounded-lg font-bold border-2 border-gray-300">&lt; 返回设置</button>
+                <h1 id="title-pwd" class="text-xl font-bold outline-none" tabindex="-1">修改密码</h1>
+            </div>
+        </div>
+        <div class="max-w-md mx-auto w-full p-6 mt-4">
+            <form id="form-change-pwd" class="space-y-6">
+                <div>
+                    <label for="pwd-old" class="block font-bold mb-2 text-xl">旧密码</label>
+                    <input type="password" id="pwd-old" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" aria-label="旧密码">
+                </div>
+                <div>
+                    <label for="pwd-new" class="block font-bold mb-2 text-xl">新密码 (至少6位)</label>
+                    <input type="password" id="pwd-new" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" aria-label="新密码">
+                </div>
+                <div>
+                    <label for="pwd-confirm" class="block font-bold mb-2 text-xl">确认新密码</label>
+                    <input type="password" id="pwd-confirm" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" aria-label="确认新密码">
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white p-5 rounded-lg font-bold text-2xl shadow-lg mt-4">确认修改</button>
+            </form>
         </div>
     </div>
 <script type="module" src="script.js"></script>
