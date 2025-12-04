@@ -1,5 +1,5 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged, deleteUser, setPersistence, browserLocalPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged, deleteUser, setPersistence, browserLocalPersistence, browserSessionPersistence, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, getDocs, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch, increment, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // Config
@@ -918,6 +918,12 @@ e.preventDefault();
             const fam = document.getElementById('set-family-name').value.trim();
             if(!nick) { announce("昵称不能为空"); return; }
             
+// 同步更新 Firebase 云端用户资料
+            try {
+                await updateProfile(auth.currentUser, { displayName: nick });
+            } catch (err) {
+                console.error("更新昵称失败", err);
+            }
             // 保存家庭名称
             if(fam) {
                 currentFamilyName = fam;
@@ -974,6 +980,7 @@ e.preventDefault();
                 // 视觉呈现文本
                 const label = document.createElement('span');
                 label.className = "text-xl font-bold text-gray-700 ml-2 pointer-events-none";
+label.setAttribute('aria-hidden', 'true'); // 防止读屏重复朗读文本，只读复选框
                 label.textContent = item;
 
                 // 选中状态视觉同步
