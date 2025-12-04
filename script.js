@@ -163,9 +163,10 @@ else if (screenId === 'screen-settings') currentScreen = 'settings';
         onAuthStateChanged(auth, user => {
 if (user) {
                 // 优化朗读：优先显示昵称，并去除“点击展开菜单”冗余提示
-                const nickName = user.displayName || '未设置昵称';
-                const labelText = `当前账号：${nickName}，${user.email}`;
-                
+const nickName = user.displayName || '未设置昵称';
+                // 读取本地家庭名称
+                const familyName = localStorage.getItem('family_name_cache') || '未设置家庭';
+                const labelText = `当前账号：${nickName}，所属家庭：${familyName}，${user.email}`;
                 document.getElementById('btn-account-menu').setAttribute('aria-label', labelText);
                 document.getElementById('user-email-display').textContent = nickName;
                 switchScreen('screen-home');
@@ -603,9 +604,11 @@ if (user) {
         document.getElementById('btn-back-edit').addEventListener('click', cancelEdit);
         document.getElementById('btn-cancel-edit-form').addEventListener('click', cancelEdit);
 
-        // Unit Picker
+// Unit Picker
         let unitTargetInput = null;
+        let unitTriggerBtnId = null; // 新增：记录是谁打开的
         const unitGrid = document.getElementById('unit-grid');
+        
         function initUnitGrid() {
             unitGrid.innerHTML = '';
             UNIT_LIST.forEach(u => {
@@ -618,13 +621,27 @@ if (user) {
                 unitGrid.appendChild(btn);
             });
         }
-        window.openUnitPicker = (inputId) => {
-            playSound('click'); unitTargetInput = document.getElementById(inputId); initUnitGrid(); 
-            document.getElementById('modal-unit').classList.remove('hidden'); document.getElementById('unit-title').focus();
+        
+        // 修改：增加 triggerBtnId 参数
+        window.openUnitPicker = (inputId, triggerBtnId) => {
+            playSound('click'); 
+            unitTargetInput = document.getElementById(inputId); 
+            unitTriggerBtnId = triggerBtnId; // 记录触发按钮ID
+            initUnitGrid(); 
+            document.getElementById('modal-unit').classList.remove('hidden'); 
+            document.getElementById('unit-title').focus();
         };
-        window.closeUnitModal = () => { document.getElementById('modal-unit').classList.add('hidden'); if(unitTargetInput) unitTargetInput.focus(); };
-        document.getElementById('btn-pick-unit-add').addEventListener('click', () => openUnitPicker('add-unit'));
-        document.getElementById('btn-pick-unit-edit').addEventListener('click', () => openUnitPicker('edit-unit'));
+
+        // 修改：关闭时将焦点还给触发按钮
+        window.closeUnitModal = () => { 
+            document.getElementById('modal-unit').classList.add('hidden'); 
+            if(unitTriggerBtnId) {
+                const btn = document.getElementById(unitTriggerBtnId);
+                if(btn) btn.focus();
+            }
+        };
+document.getElementById('btn-pick-unit-add').addEventListener('click', () => openUnitPicker('add-unit', 'btn-pick-unit-add'));
+        document.getElementById('btn-pick-unit-edit').addEventListener('click', () => openUnitPicker('edit-unit', 'btn-pick-unit-edit'));
 
         // Edit Execution
         document.getElementById('form-edit').addEventListener('submit', async (e) => {
@@ -835,10 +852,12 @@ if (user) {
             document.getElementById('menu-account-dropdown').classList.add('hidden');
             document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false');
             switchScreen('screen-settings');
-            // 默认加载个人资料
-            // TODO: 这里后续需要回显用户真实数据
-            document.getElementById('set-nickname').value = auth.currentUser.displayName || '';
+// 默认加载个人资料
+            // 回显昵称和家庭名称
+document.getElementById('set-nickname').value = auth.currentUser.displayName || '';
+            document.getElementById('set-family-name').value = localStorage.getItem('family_name_cache') || '';
         });
+
         document.getElementById('btn-back-settings').addEventListener('click', () => switchScreen('screen-home'));
 
         // Tab 切换核心逻辑 (支持箭头键)
@@ -888,6 +907,8 @@ if (user) {
         document.getElementById('form-profile').addEventListener('submit', async (e) => {
             e.preventDefault();
             const nick = document.getElementById('set-nickname').value.trim();
+const familyName = document.getElementById('set-family-name').value.trim();
+            localStorage.setItem('family_name_cache', familyName);
 try {
                 await updateProfile(auth.currentUser, { displayName: nick });
             } catch (err) {
@@ -898,8 +919,8 @@ try {
 
             // 更新本地界面显示
             const currentUser = auth.currentUser;
-            if (currentUser) {
-                const labelText = `当前账号：${nick}，${currentUser.email}`;
+if (currentUser) {
+                const labelText = `当前账号：${nick}，所属家庭：${familyName}，${currentUser.email}`;
                 document.getElementById('btn-account-menu').setAttribute('aria-label', labelText);
                 document.getElementById('user-email-display').textContent = nick;
             }
@@ -935,17 +956,63 @@ try {
             alert("为了安全，修改密码功能将在下个版本完善重新认证逻辑。");
         });
 
-        // Global Keydown
+// Global Keydown (ESC Logic Optimized)
         window.addEventListener('keydown', (e) => {
             if(e.key === 'Escape') {
-                if (currentScreen === 'edit') return; 
+                // 1. 优先处理弹窗 (单位选择、数量选择、操作菜单等)
+                // 必须阻止默认行为，防止浏览器停止页面加载等
+                
+                // 单位选择框 (特殊处理，需要归还焦点)
+                if (!document.getElementById('modal-unit').classList.contains('hidden')) {
+                    e.preventDefault(); closeUnitModal(); return;
+                }
+                
+                // 数量选择框
+                if (!document.getElementById('modal-qty').classList.contains('hidden')) {
+                    e.preventDefault(); closeQtyModal(); return;
+                }
+
+                // 其他通用模态框 (Confirm, Action, Zero, Forgot)
+                const visibleModals = document.querySelectorAll('[id^="modal-"]:not(.hidden)');
+                if (visibleModals.length > 0) {
+                    e.preventDefault(); closeModals(); return;
+                }
+
+                // 账户菜单
                 const menu = document.getElementById('menu-account-dropdown');
-                if (!menu.classList.contains('hidden')) { e.preventDefault(); menu.classList.add('hidden'); document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false'); document.getElementById('btn-account-menu').focus(); return; }
-                const modals = document.querySelectorAll('[id^="modal-"]:not(.hidden)'); if (modals.length > 0) { e.preventDefault(); closeModals(); document.getElementById('modal-qty').classList.add('hidden'); document.getElementById('modal-unit').classList.add('hidden'); return; }
-                if (currentScreen !== 'home' && currentScreen !== 'login') { 
-                    document.getElementById('home-search').value = ''; document.getElementById('takeout-search').value = '';
-                    document.getElementById('btn-clear-home-search').classList.add('hidden'); document.getElementById('btn-clear-takeout-search').classList.add('hidden');
-                    e.preventDefault(); switchScreen('screen-home'); 
+                if (!menu.classList.contains('hidden')) {
+                    e.preventDefault(); 
+                    menu.classList.add('hidden'); 
+                    document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false'); 
+                    document.getElementById('btn-account-menu').focus(); 
+                    return; 
+                }
+
+                // 2. 页面层级返回逻辑
+                // 编辑页 -> 返回上一页
+                if (currentScreen === 'edit') {
+                    // 编辑页通常有专门的“取消”按钮处理逻辑，这里简单处理为返回
+                    // 但为了防止数据丢失误触，建议不做操作，或者模拟点击“取消”
+                    // 这里为了方便，我们模拟点击“返回”
+                    e.preventDefault(); document.getElementById('btn-back-edit').click(); return;
+                }
+
+                // 二级设置页 (改密、加房间、删房间) -> 返回 设置页
+                if (['screen-change-pwd', 'screen-room-add', 'screen-room-delete'].includes(currentScreen)) {
+                    e.preventDefault(); switchScreen('screen-settings'); return;
+                }
+
+                // 一级功能页 (设置、新增、取出、数据、结果) -> 返回 首页
+                if (['screen-settings', 'screen-add', 'screen-takeout', 'screen-data', 'screen-results'].includes(currentScreen)) {
+                    e.preventDefault(); switchScreen('screen-home'); return;
+                }
+
+                // 搜索框清理
+                if (currentScreen === 'home' || currentScreen === 'takeout') {
+                    const searchInput = currentScreen === 'home' ? document.getElementById('home-search') : document.getElementById('takeout-search');
+                    if (document.activeElement === searchInput && searchInput.value !== '') {
+                        e.preventDefault(); searchInput.value = ''; announce("已清除搜索"); return;
+                    }
                 }
             }
         });
