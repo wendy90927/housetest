@@ -604,11 +604,19 @@ if (user) {
                 unitGrid.appendChild(btn);
             });
         }
-        window.openUnitPicker = (inputId) => {
+window.openUnitPicker = (inputId) => {
             playSound('click'); unitTargetInput = document.getElementById(inputId); initUnitGrid(); 
             document.getElementById('modal-unit').classList.remove('hidden'); document.getElementById('unit-title').focus();
         };
-        window.closeUnitModal = () => { document.getElementById('modal-unit').classList.add('hidden'); if(unitTargetInput) unitTargetInput.focus(); };
+        window.closeUnitModal = () => { 
+            document.getElementById('modal-unit').classList.add('hidden'); 
+            // 焦点修复：根据触发源归还焦点到按钮
+            if (unitTargetInput && unitTargetInput.id === 'add-unit') {
+                document.getElementById('btn-pick-unit-add').focus();
+            } else if (unitTargetInput && unitTargetInput.id === 'edit-unit') {
+                document.getElementById('btn-pick-unit-edit').focus();
+            }
+        };
         document.getElementById('btn-pick-unit-add').addEventListener('click', () => openUnitPicker('add-unit'));
         document.getElementById('btn-pick-unit-edit').addEventListener('click', () => openUnitPicker('edit-unit'));
 
@@ -921,17 +929,56 @@ try {
             alert("为了安全，修改密码功能将在下个版本完善重新认证逻辑。");
         });
 
-        // Global Keydown
+// Global Keydown
         window.addEventListener('keydown', (e) => {
             if(e.key === 'Escape') {
+                // 1. 编辑页特殊处理：不自动退出，需手动取消
                 if (currentScreen === 'edit') return; 
+
+                // 2. 优先关闭下拉菜单
                 const menu = document.getElementById('menu-account-dropdown');
-                if (!menu.classList.contains('hidden')) { e.preventDefault(); menu.classList.add('hidden'); document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false'); document.getElementById('btn-account-menu').focus(); return; }
-                const modals = document.querySelectorAll('[id^="modal-"]:not(.hidden)'); if (modals.length > 0) { e.preventDefault(); closeModals(); document.getElementById('modal-qty').classList.add('hidden'); document.getElementById('modal-unit').classList.add('hidden'); return; }
-                if (currentScreen !== 'home' && currentScreen !== 'login') { 
-                    document.getElementById('home-search').value = ''; document.getElementById('takeout-search').value = '';
-                    document.getElementById('btn-clear-home-search').classList.add('hidden'); document.getElementById('btn-clear-takeout-search').classList.add('hidden');
-                    e.preventDefault(); switchScreen('screen-home'); 
+                if (!menu.classList.contains('hidden')) { 
+                    e.preventDefault(); 
+                    menu.classList.add('hidden'); 
+                    document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false'); 
+                    document.getElementById('btn-account-menu').focus(); 
+                    return; 
+                }
+
+                // 3. 优先关闭所有模态框
+                const modals = document.querySelectorAll('[id^="modal-"]:not(.hidden)'); 
+                if (modals.length > 0) { 
+                    e.preventDefault(); 
+                    if(!document.getElementById('modal-unit').classList.contains('hidden')) {
+                        closeUnitModal(); // 走专用关闭逻辑以修复焦点
+                    } else if(!document.getElementById('modal-qty').classList.contains('hidden')) {
+                        closeQtyModal(); // 走专用关闭逻辑以修复焦点
+                    } else {
+                        closeModals(); 
+                    }
+                    return; 
+                }
+
+                // 4. 页面导航逻辑
+                // 子设置页 -> 返回设置主页
+                const subSettingsScreens = ['screen-room-add', 'screen-room-delete', 'screen-change-pwd'];
+                if (subSettingsScreens.includes(document.getElementById('screen-' + currentScreen)?.id || '')) {
+                    e.preventDefault();
+                    switchScreen('screen-settings');
+                    return;
+                }
+
+                // 一级页面 -> 返回首页
+                const topLevelScreens = ['settings', 'data', 'add', 'takeout', 'results'];
+                if (topLevelScreens.includes(currentScreen)) {
+                     e.preventDefault();
+                     // 清理搜索状态
+                     document.getElementById('home-search').value = ''; 
+                     document.getElementById('takeout-search').value = '';
+                     document.getElementById('btn-clear-home-search').classList.add('hidden'); 
+                     document.getElementById('btn-clear-takeout-search').classList.add('hidden');
+                     switchScreen('screen-home');
+                     return;
                 }
             }
         });
