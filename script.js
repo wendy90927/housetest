@@ -1,6 +1,20 @@
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged, deleteUser, setPersistence, browserLocalPersistence, browserSessionPersistence, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        const db = getFirestore(app);
+import { getFirestore, collection, addDoc, getDocs, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch, increment, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+// Config
+const firebaseConfig = {
+    apiKey: "AIzaSyC3rxfvajIswJADfzJD0lphVra99vka7nE",
+    authDomain: "household-item-management.firebaseapp.com",
+    projectId: "household-item-management",
+    storageBucket: "household-item-management.firebasestorage.app",
+    messagingSenderId: "1042289941268",
+    appId: "1:1042289941268:web:2d77a3a9fb2cf666ed0001"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
         const itemsRef = collection(db, "items");
 
         // --- State ---
