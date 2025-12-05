@@ -1018,7 +1018,7 @@ if (currentUser) {
         });
 // --- Room Management (Accessible Fix) ---
         
-        // 渲染无障碍房间列表 (解决双重焦点问题)
+// 渲染无障碍房间列表 (解决双重焦点问题)
         function renderAccessibleRoomList(containerId, rooms, type) {
             const container = document.getElementById(containerId);
             container.innerHTML = '';
@@ -1028,28 +1028,52 @@ if (currentUser) {
                 return;
             }
 
-            rooms.forEach(room => {
-                // 使用 Label 包裹，实现点击区域最大化
+            // 帮助提示（只读一次，辅助屏幕阅读器用户了解操作方式）
+            const hintId = `hint-${containerId}`;
+            if (!document.getElementById(hintId)) {
+                const hint = document.createElement('div');
+                hint.id = hintId;
+                hint.className = 'sr-only';
+                hint.textContent = '使用上下光标键选择房间，空格键选中或取消。';
+                container.parentElement.insertBefore(hint, container);
+            }
+
+            rooms.forEach((room, index) => {
+                // Label 容器
                 const label = document.createElement('label');
                 label.className = "relative flex items-center justify-between p-4 border-2 border-gray-300 rounded-lg bg-white shadow-sm hover:bg-gray-50 mb-3 cursor-pointer transition-colors";
                 
-                // 视觉文本 (不接受焦点，防止冗余朗读)
+                // 视觉文本 (aria-hidden，避免重复朗读，只依赖 input 的 aria-label)
                 const span = document.createElement('span');
                 span.className = "text-xl font-bold text-gray-800";
                 span.textContent = room;
+                span.setAttribute('aria-hidden', 'true');
                 
-                // 原生 Input 覆盖层 (Opacity 0)
-                // 读屏软件会聚焦在这里，并朗读 label 内的文本 + 复选框状态
+                // 原生 Input 覆盖层
                 const input = document.createElement('input');
                 input.type = 'checkbox';
                 input.value = room;
                 input.className = "absolute inset-0 w-full h-full opacity-0 cursor-pointer";
-                input.setAttribute('aria-label', `选择 ${room}`); // 双重保险
+                input.setAttribute('aria-label', room); // 读屏只读这一句，例如“阳台 复选框 未选中”
 
-                // 选中状态的视觉反馈指示器
+                // 交互核心：Roving Tabindex (游走焦点)
+                // 只有列表的第一个元素(或当前聚焦元素)可被 Tab 聚焦，其余为 -1
+                // 这样 Tab 键按一次就会进入列表，再按一次就会离开列表
+                input.tabIndex = (index === 0) ? 0 : -1;
+
+                // 选中状态的视觉反馈指示器 (aria-hidden)
                 const indicator = document.createElement('span');
                 indicator.className = "text-blue-600 font-bold opacity-0 transition-opacity";
                 indicator.textContent = "已选";
+                indicator.setAttribute('aria-hidden', 'true');
+
+                // 视觉同步：因为 input 透明，我们手动给 label 加高亮圈，模拟焦点样式
+                input.addEventListener('focus', () => {
+                    label.classList.add('ring-4', 'ring-orange-500', 'ring-offset-2');
+                });
+                input.addEventListener('blur', () => {
+                    label.classList.remove('ring-4', 'ring-orange-500', 'ring-offset-2');
+                });
 
                 // 状态联动
                 input.addEventListener('change', () => {
@@ -1063,6 +1087,27 @@ if (currentUser) {
                         label.classList.add('border-gray-300', 'bg-white');
                         indicator.classList.add('opacity-0');
                         announce(`取消选中 ${room}`);
+                    }
+                });
+
+                // 键盘导航 (上下键切换焦点)
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        e.preventDefault(); // 阻止浏览器滚动
+                        const allInputs = Array.from(container.querySelectorAll('input[type="checkbox"]'));
+                        const currentIndex = allInputs.indexOf(e.target);
+                        let nextIndex;
+
+                        if (e.key === 'ArrowDown') {
+                            nextIndex = (currentIndex + 1) % allInputs.length;
+                        } else {
+                            nextIndex = (currentIndex - 1 + allInputs.length) % allInputs.length;
+                        }
+
+                        // 移动 tabindex：旧的设为 -1，新的设为 0 并聚焦
+                        allInputs[currentIndex].tabIndex = -1;
+                        allInputs[nextIndex].tabIndex = 0;
+                        allInputs[nextIndex].focus();
                     }
                 });
 
