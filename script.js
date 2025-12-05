@@ -606,23 +606,53 @@ const nickName = user.displayName || '未设置昵称';
 
 // Unit Picker
         let unitTargetInput = null;
-        let unitTriggerBtnId = null; // 新增：记录是谁打开的
+        let unitTriggerBtnId = null; 
         const unitGrid = document.getElementById('unit-grid');
         
         function initUnitGrid() {
             unitGrid.innerHTML = '';
-            UNIT_LIST.forEach(u => {
+            const allBtns = [];
+            
+            // 强制绑定取消按钮 (修复点击无响应问题)
+            const btnCancel = document.getElementById('btn-unit-cancel');
+            btnCancel.onclick = () => window.closeUnitModal();
+
+            UNIT_LIST.forEach((u, index) => {
                 const btn = document.createElement('button');
-                btn.className = 'grid-btn'; btn.textContent = u;
+                btn.className = 'grid-btn'; 
+                btn.textContent = u;
+                // 核心交互：仅第一个元素可被Tab聚焦，其余为-1 (游走焦点)
+                btn.tabIndex = (index === 0) ? 0 : -1;
+
+                // 键盘导航：上下左右键
+                btn.addEventListener('keydown', (e) => {
+                    if (['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
+                        e.preventDefault();
+                        const idx = allBtns.indexOf(e.target);
+                        let next = idx;
+                        const total = allBtns.length;
+                        // 网格布局：每行5个
+                        if (e.key === 'ArrowRight') next = (idx + 1) % total;
+                        if (e.key === 'ArrowLeft') next = (idx - 1 + total) % total;
+                        if (e.key === 'ArrowDown') { if(idx + 5 < total) next = idx + 5; }
+                        if (e.key === 'ArrowUp') { if(idx - 5 >= 0) next = idx - 5; }
+
+                        // 转移焦点
+                        allBtns[idx].tabIndex = -1;
+                        allBtns[next].tabIndex = 0;
+                        allBtns[next].focus();
+                    }
+                });
+
                 btn.addEventListener('click', () => {
                     if(unitTargetInput) { unitTargetInput.value = u; announce(`已选择 ${u}`); unitTargetInput.focus(); }
                     closeUnitModal();
                 });
+                
+                allBtns.push(btn);
                 unitGrid.appendChild(btn);
             });
         }
-        
-        // 修改：增加 triggerBtnId 参数
         window.openUnitPicker = (inputId, triggerBtnId) => {
             playSound('click'); 
             unitTargetInput = document.getElementById(inputId); 
@@ -716,14 +746,55 @@ document.getElementById('btn-pick-unit-add').addEventListener('click', () => ope
             renderTags('edit-tags-container', 'edit-tags-input');
         }
 
-        // Qty Picker (Fixed Focus Logic)
+// Qty Picker (Fixed Focus Logic)
         let qtyCallback = null;
         const qtyGrid = document.getElementById('qty-grid');
+        const qtyBtns = [];
+
+        // 绑定取消按钮 (修复点击无效问题)
+        // 注意：closeQtyModal 是函数声明，会被提升，因此可以直接调用
+        document.getElementById('btn-qty-cancel').addEventListener('click', closeQtyModal);
+        
         qtyGrid.innerHTML = '';
         for(let i=1; i<=10; i++) {
-            const btn = document.createElement('button'); btn.className = 'grid-btn'; btn.textContent = i;
-            const handler = (e) => { if(e.type === 'keydown' && e.key !== 'Enter') return; e.preventDefault(); e.stopPropagation(); submitQty(i); };
-            btn.addEventListener('click', handler); btn.addEventListener('keydown', handler); qtyGrid.appendChild(btn);
+            const btn = document.createElement('button'); 
+            btn.className = 'grid-btn'; 
+            btn.textContent = i;
+            // 核心交互：仅数字1可被Tab聚焦
+            btn.tabIndex = (i === 1) ? 0 : -1; 
+
+            // 键盘导航：上下左右
+            btn.addEventListener('keydown', (e) => {
+                if (['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
+                    e.preventDefault();
+                    const idx = qtyBtns.indexOf(e.target);
+                    let next = idx;
+                    const total = 10;
+                    
+                    if (e.key === 'ArrowRight') next = (idx + 1) % total;
+                    if (e.key === 'ArrowLeft') next = (idx - 1 + total) % total;
+                    if (e.key === 'ArrowDown') { if (idx + 5 < total) next = idx + 5; }
+                    if (e.key === 'ArrowUp') { if (idx - 5 >= 0) next = idx - 5; }
+                    
+                    qtyBtns[idx].tabIndex = -1;
+                    qtyBtns[next].tabIndex = 0;
+                    qtyBtns[next].focus();
+                }
+            });
+
+            const handler = (e) => { 
+                if(e.type === 'keydown' && e.key !== 'Enter') return;
+                e.preventDefault(); e.stopPropagation(); 
+                submitQty(i); 
+            };
+            btn.addEventListener('click', handler); 
+            // 允许 Space/Enter 触发
+            btn.addEventListener('keydown', (e) => {
+                if(e.key === 'Enter') handler(e);
+            });
+            
+            qtyBtns.push(btn);
+            qtyGrid.appendChild(btn);
         }
         function openQtyPicker(title, cb) {
             playSound('click'); qtyCallback = cb;
