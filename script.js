@@ -481,8 +481,12 @@ let tagsHtml = '';
                 bubble.className = 'tag-bubble';
                 bubble.innerHTML = `${tag} <span class="tag-remove" role="button" tabindex="0" aria-label="删除标签 ${tag}">×</span>`;
                 const delBtn = bubble.querySelector('.tag-remove');
-                const delHandler = (e) => { 
-                    e.stopPropagation(); 
+const delHandler = (e) => { 
+                    e.stopPropagation();
+                    // 阻止默认行为（防止触发表单提交）
+                    if (e.type === 'keydown' && e.key === 'Enter') e.preventDefault();
+                    
+                    if(e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
                     if(e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
                     removeTag(tag, containerId, inputId); 
                 };
@@ -548,7 +552,7 @@ let tagsHtml = '';
             btn.setAttribute('aria-label', `当前数量 ${pendingAddQty}，点击修改`);
         }
 
-        document.getElementById('btn-nav-add').addEventListener('click', () => { 
+document.getElementById('btn-nav-add').addEventListener('click', () => { 
             switchScreen('screen-add'); 
             document.getElementById('add-name').focus(); 
             pendingAddQty = 1; 
@@ -557,6 +561,12 @@ let tagsHtml = '';
             updateAddQtyDisplay(); 
         });
         
+        // 修复：添加取消按钮监听
+        document.getElementById('btn-cancel-add').addEventListener('click', () => {
+             document.getElementById('form-add').reset();
+             switchScreen('screen-home');
+             announce("已取消添加");
+        });
         document.getElementById('btn-back-add').addEventListener('click', () => switchScreen('screen-home'));
         document.getElementById('btn-nav-data').addEventListener('click', () => switchScreen('screen-data'));
         document.getElementById('btn-back-data').addEventListener('click', () => switchScreen('screen-home'));
@@ -651,11 +661,20 @@ document.getElementById('btn-add-qty-trigger').addEventListener('click', () => {
         window.openGenericConfirm = openGenericConfirm;
 
         // --- Action Menu Logic ---
-        function openActionMenu(item) {
+function openActionMenu(item) {
             currentActionItem = item;
             document.getElementById('action-desc').textContent = `${item.name} (当前: ${item.quantity}${item.unit||'个'})`;
             document.getElementById('modal-action').classList.remove('hidden');
-            document.getElementById('btn-act-put').focus();
+            
+            // 根据上下文控制按钮显示
+            const btnPut = document.getElementById('btn-act-put');
+            if (currentScreen === 'takeout') {
+                btnPut.classList.add('hidden');
+                setTimeout(() => document.getElementById('btn-act-take').focus(), 100);
+            } else {
+                btnPut.classList.remove('hidden');
+                setTimeout(() => btnPut.focus(), 100);
+            }
         }
         // 公开给 renderList 调用
         window.openActionMenu = openActionMenu;
@@ -727,7 +746,7 @@ document.getElementById('btn-add-qty-trigger').addEventListener('click', () => {
 
         // --- Quantity Picker Logic (Step 8) ---
         let qtyCallback = null;
-        function openQtyPicker(title, cb) {
+function openQtyPicker(title, cb) {
             playSound('click'); qtyCallback = cb;
             document.getElementById('qty-title').textContent = title;
             document.getElementById('modal-action').classList.add('hidden'); document.getElementById('modal-qty').classList.remove('hidden');
@@ -741,19 +760,17 @@ document.getElementById('btn-add-qty-trigger').addEventListener('click', () => {
             const inputMain = document.getElementById('qty-custom-input'); 
             const inputSub = document.getElementById('qty-sub-input');
             const confirm = document.getElementById('btn-qty-confirm'); 
-            const trigger = document.getElementById('qty-custom-trigger');
-            const group = document.getElementById('qty-input-group');
-
-            // 重置状态
-            inputMain.value = ''; inputSub.value = ''; 
-            inputMain.disabled = true; inputSub.disabled = true; 
-            confirm.disabled = true; 
             
-            group.classList.add('opacity-50', 'pointer-events-none');
-            group.setAttribute('aria-hidden', 'true');
+            // 默认直接启用输入
+            inputMain.disabled = false;
+            inputSub.disabled = false;
+            confirm.disabled = false;
+            inputMain.value = ''; 
+            inputSub.value = '';
             
-            trigger.classList.remove('hidden');
-            trigger.setAttribute('tabindex', '0');
+            // 移除旧的 hidden/disabled 逻辑
+            document.getElementById('qty-input-group').classList.remove('opacity-50', 'pointer-events-none');
+            document.getElementById('qty-input-group').removeAttribute('aria-hidden');
 
             // 渲染快捷按钮 (仅针对主数量)
             const grid = document.getElementById('qty-grid');
