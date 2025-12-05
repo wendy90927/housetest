@@ -481,8 +481,9 @@ let tagsHtml = '';
                 bubble.className = 'tag-bubble';
                 bubble.innerHTML = `${tag} <span class="tag-remove" role="button" tabindex="0" aria-label="删除标签 ${tag}">×</span>`;
                 const delBtn = bubble.querySelector('.tag-remove');
-                const delHandler = (e) => { 
-                    e.stopPropagation(); 
+const delHandler = (e) => { 
+                    e.preventDefault(); // 阻止表单提交
+                    e.stopPropagation();
                     if(e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
                     removeTag(tag, containerId, inputId); 
                 };
@@ -548,27 +549,16 @@ let tagsHtml = '';
             btn.setAttribute('aria-label', `当前数量 ${pendingAddQty}，点击修改`);
         }
 
-        document.getElementById('btn-nav-add').addEventListener('click', () => { 
+document.getElementById('btn-nav-add').addEventListener('click', () => { 
             switchScreen('screen-add'); 
             document.getElementById('add-name').focus(); 
-            pendingAddQty = 1; 
+            document.getElementById('add-quantity').value = 1;
             pendingTags = []; 
             renderTags('add-tags-container', 'add-tags-input');
-            updateAddQtyDisplay(); 
         });
-        
         document.getElementById('btn-back-add').addEventListener('click', () => switchScreen('screen-home'));
         document.getElementById('btn-nav-data').addEventListener('click', () => switchScreen('screen-data'));
         document.getElementById('btn-back-data').addEventListener('click', () => switchScreen('screen-home'));
-        
-document.getElementById('btn-add-qty-trigger').addEventListener('click', () => {
-            openQtyPicker("初始数量", (main, sub) => {
-                pendingAddQty = main;
-                updateAddQtyDisplay();
-                // 初始数量通常只设置主数量，这里暂存 sub 如果需要的话，但目前 pendingAddQty 是个数字
-                // 简单起见，初始设置只更新主数量显示
-            });
-        });
 
         // 单位选择逻辑
         function openUnitPicker(targetId) {
@@ -589,14 +579,16 @@ document.getElementById('btn-add-qty-trigger').addEventListener('click', () => {
         }
         function closeUnitModal() { document.getElementById('modal-unit').classList.add('hidden'); }
         document.getElementById('btn-pick-unit-add').onclick = () => openUnitPicker('add-unit');
+document.getElementById('btn-pick-sub-unit-add').onclick = () => openUnitPicker('add-sub-unit');
         document.getElementById('btn-pick-unit-edit').onclick = () => openUnitPicker('edit-unit');
 
         // 新增物品提交逻辑 (修复版)
         document.getElementById('form-add').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const name = document.getElementById('add-name').value.trim();
+const name = document.getElementById('add-name').value.trim();
             if(!name) return;
             
+            const mainQ = parseFloat(document.getElementById('add-quantity').value) || 0;
             const subQ = parseFloat(document.getElementById('add-sub-quantity').value) || 0;
             const subU = document.getElementById('add-sub-unit').value.trim();
 
@@ -606,12 +598,11 @@ document.getElementById('btn-add-qty-trigger').addEventListener('click', () => {
                     category: document.getElementById('add-category').value,
                     tags: pendingTags,
                     unit: document.getElementById('add-unit').value,
-                    room: document.getElementById('add-room').value,
+room: document.getElementById('add-room').value,
                     location: document.getElementById('add-location').value,
-                    quantity: pendingAddQty,
+                    quantity: mainQ,
                     subQuantity: subQ,
-                    subUnit: subU,
-                    uid: auth.currentUser.uid, 
+uid: auth.currentUser.uid, 
                     updatedAt: serverTimestamp() 
                 });
                 announce(`已添加 ${name}`);
@@ -620,8 +611,7 @@ document.getElementById('btn-add-qty-trigger').addEventListener('click', () => {
                 document.getElementById('form-add').reset();
                 pendingTags = []; 
                 renderTags('add-tags-container', 'add-tags-input');
-                pendingAddQty = 1; 
-                updateAddQtyDisplay();
+                document.getElementById('add-quantity').value = 1;
                 document.getElementById('add-name').focus();
             } catch(err) {
                 announce("添加失败");
@@ -658,17 +648,61 @@ document.getElementById('btn-add-qty-trigger').addEventListener('click', () => {
             document.getElementById('btn-act-put').focus();
         }
         // 公开给 renderList 调用
-        window.openActionMenu = openActionMenu;
+window.openActionMenu = openActionMenu;
 
-        document.getElementById('btn-act-put').onclick = () => { 
-            // 放入：传入正数
-            openQtyPicker("放入数量", (m, s) => handleUpdate(m, s)); 
-        };
-        document.getElementById('btn-act-take').onclick = () => { 
-            // 取出：传入负数
-            openQtyPicker("取出数量", (m, s) => handleUpdate(-m, -s)); 
-        };
-        
+        function handleActionClick(isPut) {
+            const item = currentActionItem;
+            const factor = isPut ? 1 : -1;
+            const actionName = isPut ? "放入" : "取出";
+
+            if (!item.subUnit) {
+                openQtyPicker(`${actionName}数量 (${item.unit||'个'})`, (m) => handleUpdate(m * factor, 0));
+                return;
+            }
+
+            const m = document.getElementById('modal-confirm');
+            document.getElementById('title-confirm').textContent = `请选择${actionName}单位`;
+            document.getElementById('confirm-text').textContent = `该物品包含主单位（${item.unit}）和子单位（${item.subUnit}），请选择要${actionName}哪种？`;
+            
+            const btnMain = document.getElementById('btn-confirm-ok');
+            const btnSub = document.getElementById('btn-confirm-cancel');
+            
+            // 临时修改按钮文本
+            btnMain.textContent = `按 ${item.unit} ${actionName}`;
+            btnSub.textContent = `按 ${item.subUnit} ${actionName}`;
+            
+            // 备份并修改样式
+            const originalSubClass = btnSub.className;
+            btnSub.className = "flex-1 p-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow";
+
+            const cleanup = () => {
+                m.classList.add('hidden');
+                btnMain.textContent = "确认执行";
+                btnSub.textContent = "取消";
+                btnSub.className = originalSubClass;
+            };
+
+            const newBtnMain = btnMain.cloneNode(true);
+            const newBtnSub = btnSub.cloneNode(true);
+            btnMain.parentNode.replaceChild(newBtnMain, btnMain);
+            btnSub.parentNode.replaceChild(newBtnSub, btnSub);
+
+            newBtnMain.onclick = () => {
+                cleanup();
+                openQtyPicker(`${actionName}${item.unit}`, (val) => handleUpdate(val * factor, 0));
+            };
+
+            newBtnSub.onclick = () => {
+                cleanup();
+                openQtyPicker(`${actionName}${item.subUnit}`, (val) => handleUpdate(0, val * factor));
+            };
+
+            m.classList.remove('hidden');
+            newBtnMain.focus();
+        }
+
+        document.getElementById('btn-act-put').onclick = () => handleActionClick(true);
+        document.getElementById('btn-act-take').onclick = () => handleActionClick(false);
         document.getElementById('btn-act-edit').onclick = () => {
             closeModals();
             switchScreen('screen-edit');
