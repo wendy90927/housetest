@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>家庭物品管家V1.97</title>
+    <title>家庭物品管家V1.98</title>
     <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -236,8 +236,8 @@
                         </div>
                     </div>
                     <div>
-                         <label for="add-quantity" class="block font-bold mb-2 text-xl">主数量 (必填)</label>
-                         <input type="number" id="add-quantity" required step="any" class="w-full p-4 border-2 border-blue-300 bg-blue-50 text-blue-900 font-bold text-xl rounded-lg" placeholder="1" value="1" aria-label="主数量">
+<label for="add-quantity" class="block font-bold mb-2 text-xl">主数量 (必填)</label>
+                         <input type="number" id="add-quantity" required step="any" inputmode="decimal" class="w-full p-4 border-2 border-blue-300 bg-blue-50 text-blue-900 font-bold text-xl rounded-lg" placeholder="1" value="1" aria-label="主数量">
                     </div>
                 </div>
 
@@ -250,8 +250,8 @@
                         </div>
                     </div>
                     <div>
-                        <label for="add-sub-quantity" class="block font-bold mb-2 text-xl">子数量 (可选)</label>
-                        <input type="number" id="add-sub-quantity" step="any" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" placeholder="0" aria-label="子数量">
+<label for="add-sub-quantity" class="block font-bold mb-2 text-xl">子数量 (可选)</label>
+                        <input type="number" id="add-sub-quantity" step="any" inputmode="decimal" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" placeholder="0" aria-label="子数量">
                     </div>
                 </div>
 
@@ -285,7 +285,7 @@
         </div>
         
         <div class="max-w-lg mx-auto w-full p-6 overflow-y-auto">
-            <form id="form-edit" class="space-y-6">
+<form id="form-edit" class="space-y-6">
                 <div>
                     <label for="edit-name" class="block font-bold mb-2 text-xl">物品名称</label>
                     <input type="text" id="edit-name" required class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" aria-label="物品名称">
@@ -313,36 +313,36 @@
                     <div id="edit-tags-container" class="flex flex-wrap gap-2 mt-3 min-h-[40px] p-2 bg-gray-50 rounded border border-gray-200" role="list" aria-label="已添加的标签"></div>
                 </div>
 
-                <div>
-                    <label for="edit-unit" class="block font-bold mb-2 text-xl">单位</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="edit-unit" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" aria-label="单位">
-<button type="button" id="btn-pick-unit-edit" class="bg-gray-200 text-gray-800 px-4 rounded-lg font-bold border-2 border-gray-300 whitespace-nowrap text-lg">选单位</button>
+                <div class="grid grid-cols-1 gap-4">
+                    <div>
+                        <label for="edit-unit" class="block font-bold mb-2 text-xl">主单位</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="edit-unit" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" aria-label="单位">
+                            <button type="button" id="btn-pick-unit-edit" class="bg-gray-200 text-gray-800 px-4 rounded-lg font-bold border-2 border-gray-300 whitespace-nowrap text-lg">选单位</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="edit-quantity" class="block font-bold mb-2 text-xl">主数量</label>
+                        <input type="number" id="edit-quantity" step="any" inputmode="decimal" class="w-full p-4 border-2 border-blue-300 bg-blue-50 text-blue-900 font-bold text-xl rounded-lg" aria-label="主数量">
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 gap-4">
                     <div>
-                        <label for="edit-sub-quantity" class="block font-bold mb-2 text-xl">子数量</label>
-                        <input type="number" id="edit-sub-quantity" step="any" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" aria-label="子数量">
-                    </div>
-                    <div>
-                        <label for="edit-sub-unit" class="block font-bold mb-2 text-xl">子单位</label>
+                        <label for="edit-sub-unit" class="block font-bold mb-2 text-xl">子单位 (可选)</label>
                         <input type="text" id="edit-sub-unit" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" aria-label="子单位">
                     </div>
+                    <div>
+                        <label for="edit-sub-quantity" class="block font-bold mb-2 text-xl">子数量 (可选)</label>
+                        <input type="number" id="edit-sub-quantity" step="any" inputmode="decimal" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" aria-label="子数量">
+                    </div>
                 </div>
+
                 <div class="grid grid-cols-1 gap-6">
                     <div>
                         <label for="edit-room" class="block font-bold mb-2 text-xl">房间</label>
                         <select id="edit-room" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl bg-white text-black" aria-label="房间">
-                            <option value="厨房">厨房</option>
-                            <option value="客厅">客厅</option>
-                            <option value="卧室">卧室</option>
-                            <option value="书房">书房</option>
-                            <option value="餐厅">餐厅</option>
-                            <option value="玄关">玄关</option>
-                            <option value="卫生间">卫生间</option>
-                            <option value="洗衣房">洗衣房</option>
+                            <option value="厨房">厨房</option><option value="客厅">客厅</option><option value="卧室">卧室</option><option value="书房">书房</option><option value="餐厅">餐厅</option><option value="玄关">玄关</option><option value="卫生间">卫生间</option><option value="洗衣房">洗衣房</option>
                         </select>
                     </div>
                     <div>
@@ -350,10 +350,7 @@
                         <input type="text" id="edit-location" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" aria-label="具体位置">
                     </div>
                 </div>
-                <div>
-                    <label for="edit-quantity" class="block font-bold mb-2 text-xl">数量 (直接修改)</label>
-                    <input type="number" id="edit-quantity" class="w-full p-4 border-2 border-blue-300 bg-blue-50 text-blue-900 font-bold text-xl rounded-lg" aria-label="数量">
-                </div>
+
                 <div class="flex flex-col gap-4 mt-8">
                     <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white p-5 rounded-lg font-bold text-2xl shadow-lg">保存修改</button>
                     <button type="button" id="btn-cancel-edit-form" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 p-4 rounded-lg font-bold text-xl border-2 border-gray-300">取消修改</button>
@@ -416,15 +413,15 @@
                     <span class="font-bold text-blue-800 text-lg">点击启用自定义输入</span>
                 </div>
 
-                <div id="qty-input-group" class="flex flex-col gap-3 opacity-50 pointer-events-none transition-opacity" aria-hidden="true">
+<div id="qty-input-group" class="flex flex-col gap-3 opacity-50 pointer-events-none transition-opacity" aria-hidden="true">
                     <div class="flex gap-2 items-center">
                         <label for="qty-custom-input" class="w-16 font-bold">主数量:</label>
-                        <input type="number" step="any" id="qty-custom-input" class="flex-grow p-3 border-2 border-gray-300 rounded-lg text-xl font-bold" placeholder="#" disabled>
+                        <input type="number" step="any" inputmode="decimal" id="qty-custom-input" class="flex-grow p-3 border-2 border-gray-300 rounded-lg text-xl font-bold" placeholder="#" disabled>
                         <span id="qty-display-unit" class="w-10 text-sm font-bold text-gray-500 truncate">个</span>
                     </div>
                     <div class="flex gap-2 items-center">
                         <label for="qty-sub-input" class="w-16 font-bold">子数量:</label>
-                        <input type="number" step="any" id="qty-sub-input" class="flex-grow p-3 border-2 border-gray-300 rounded-lg text-xl font-bold" placeholder="#" disabled>
+                        <input type="number" step="any" inputmode="decimal" id="qty-sub-input" class="flex-grow p-3 border-2 border-gray-300 rounded-lg text-xl font-bold" placeholder="#" disabled>
                         <span id="qty-display-sub-unit" class="w-10 text-sm font-bold text-gray-500 truncate"></span>
                     </div>
                     <button id="btn-qty-confirm" class="w-full bg-blue-600 text-white font-bold p-3 rounded-lg shadow mt-2" disabled>确定</button>
