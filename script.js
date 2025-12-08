@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged, deleteUser, setPersistence, browserLocalPersistence, browserSessionPersistence, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, getDocs, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch, increment, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch, increment, serverTimestamp, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // Config
 const firebaseConfig = {
@@ -160,15 +160,28 @@ else if (screenId === 'screen-settings') currentScreen = 'settings';
         }
 
         // --- Auth & Init ---
-        onAuthStateChanged(auth, user => {
-if (user) {
-                // 优化朗读：优先显示昵称，并去除“点击展开菜单”冗余提示
-const nickName = user.displayName || '未设置昵称';
-                // 读取本地家庭名称
-                const familyName = localStorage.getItem('family_name_cache') || '未设置家庭';
+onAuthStateChanged(auth, async user => {
+            if (user) {
+                // 优化朗读：优先显示昵称
+                const nickName = user.displayName || '未设置昵称';
+                
+                // --- 修复：从数据库获取家庭名称 (数据隔离) ---
+                let familyName = '未设置家庭';
+                try {
+                    const userDoc = await getDoc(doc(db, "users", user.uid));
+                    if (userDoc.exists() && userDoc.data().familyName) {
+                        familyName = userDoc.data().familyName;
+                    }
+                } catch (e) {
+                    console.error("获取家庭信息失败", e);
+                }
+
                 const labelText = `当前账号：${nickName}，所属家庭：${familyName}，${user.email}`;
                 document.getElementById('btn-account-menu').setAttribute('aria-label', labelText);
                 document.getElementById('user-email-display').textContent = nickName;
+                // 将家庭名称暂存到 dataset 中，供设置页面回显使用，避免反复请求
+                document.getElementById('btn-account-menu').dataset.familyName = familyName;
+
                 switchScreen('screen-home');
                 setupDataListener(user.uid);
             } else {
@@ -1052,14 +1065,17 @@ document.getElementById('file-upload').addEventListener('change', (e) => {
         });
 
 // --- Settings & Tabs Logic ---
-        document.getElementById('btn-settings').addEventListener('click', () => {
+document.getElementById('btn-settings').addEventListener('click', () => {
             document.getElementById('menu-account-dropdown').classList.add('hidden');
             document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false');
             switchScreen('screen-settings');
-// 默认加载个人资料
-            // 回显昵称和家庭名称
-document.getElementById('set-nickname').value = auth.currentUser.displayName || '';
-            document.getElementById('set-family-name').value = localStorage.getItem('family_name_cache') || '';
+            // 默认加载个人资料
+            // 回显昵称和家庭名称 (从 DOM 状态或 User 对象读取)
+            document.getElementById('set-nickname').value = auth.currentUser.displayName || '';
+            
+            // --- 修复：回显家庭名称 (优先读取刚才加载的数据) ---
+            const currentFamilyName = document.getElementById('btn-account-menu').dataset.familyName || '';
+            document.getElementById('set-family-name').value = (currentFamilyName === '未设置家庭') ? '' : currentFamilyName;
         });
 
         document.getElementById('btn-back-settings').addEventListener('click', () => switchScreen('screen-home'));
@@ -1108,13 +1124,22 @@ document.getElementById('set-nickname').value = auth.currentUser.displayName || 
         });
 
 // 个人资料保存
-        document.getElementById('form-profile').addEventListener('submit', async (e) => {
+document.getElementById('form-profile').addEventListener('submit', async (e) => {
             e.preventDefault();
             const nick = document.getElementById('set-nickname').value.trim();
-const familyName = document.getElementById('set-family-name').value.trim();
-            localStorage.setItem('family_name_cache', familyName);
-try {
+            const familyName = document.getElementById('set-family-name').value.trim();
+            
+            // --- 修复：保存到数据库 (数据隔离) ---
+            try {
                 await updateProfile(auth.currentUser, { displayName: nick });
+                
+                // 将家庭名称写入 users 集合
+                await setDoc(doc(db, "users", auth.currentUser.uid), { 
+                    familyName: familyName,
+                    email: auth.currentUser.email,
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
+
             } catch (err) {
                 announce("保存失败，请重试");
                 console.error(err);
@@ -1123,17 +1148,17 @@ try {
 
             // 更新本地界面显示
             const currentUser = auth.currentUser;
-if (currentUser) {
-                const labelText = `当前账号：${nick}，所属家庭：${familyName}，${currentUser.email}`;
+            if (currentUser) {
+                const displayFamily = familyName || '未设置家庭';
+                const labelText = `当前账号：${nick}，所属家庭：${displayFamily}，${currentUser.email}`;
                 document.getElementById('btn-account-menu').setAttribute('aria-label', labelText);
+                document.getElementById('btn-account-menu').dataset.familyName = displayFamily;
                 document.getElementById('user-email-display').textContent = nick;
             }
 
             announce(`设置已保存，昵称更新为 ${nick}`);
             switchScreen('screen-home');
         });
-
-        // 取消按钮逻辑
         document.getElementById('btn-cancel-profile').addEventListener('click', () => {
             announce("已取消");
             switchScreen('screen-home');
