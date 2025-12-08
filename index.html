@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>家庭物品管家V1.97</title>
+    <title>家庭物品管家V1.95</title>
     <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -198,7 +198,7 @@
         </div>
         
         <div class="max-w-lg mx-auto w-full p-6 overflow-y-auto">
-<form id="form-add" class="space-y-6">
+            <form id="form-add" class="space-y-6">
                 <div>
                     <label for="add-name" class="block font-bold mb-2 text-xl">物品名称 (必填)</label>
                     <input type="text" id="add-name" required class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" placeholder="如：洗发水" aria-label="物品名称，输入后尝试自动分类">
@@ -227,45 +227,37 @@
                     <div id="add-tags-container" class="flex flex-wrap gap-2 mt-3 min-h-[40px] p-2 bg-gray-50 rounded border border-gray-200" role="list" aria-label="已添加的标签"></div>
                 </div>
 
-                <div class="grid grid-cols-1 gap-4">
-                    <div>
-                        <label for="add-unit" class="block font-bold mb-2 text-xl">主单位</label>
-                        <div class="flex gap-2">
-                            <input type="text" id="add-unit" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" placeholder="如：个" value="个" aria-label="主单位">
-                            <button type="button" id="btn-pick-unit-add" class="bg-gray-200 text-gray-800 px-4 rounded-lg font-bold border-2 border-gray-300 whitespace-nowrap text-lg">选单位</button>
-                        </div>
-                    </div>
-                    <div>
-                         <label for="add-quantity" class="block font-bold mb-2 text-xl">主数量 (必填)</label>
-                         <input type="number" id="add-quantity" required step="any" class="w-full p-4 border-2 border-blue-300 bg-blue-50 text-blue-900 font-bold text-xl rounded-lg" placeholder="1" value="1" aria-label="主数量">
+                <div>
+                    <label for="add-unit" class="block font-bold mb-2 text-xl">单位</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="add-unit" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" placeholder="如：个" value="个" aria-label="单位">
+                        <button type="button" id="btn-pick-unit-add" class="bg-gray-200 text-gray-800 px-4 rounded-lg font-bold border-2 border-gray-300 whitespace-nowrap text-lg">选单位</button>
                     </div>
                 </div>
-
-                <div class="grid grid-cols-1 gap-4">
-                    <div>
-                        <label for="add-sub-unit" class="block font-bold mb-2 text-xl">子单位 (可选)</label>
-                        <div class="flex gap-2">
-                            <input type="text" id="add-sub-unit" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" placeholder="如：瓶" aria-label="子单位">
-                            <button type="button" id="btn-pick-sub-unit-add" class="bg-gray-200 text-gray-800 px-4 rounded-lg font-bold border-2 border-gray-300 whitespace-nowrap text-lg">选单位</button>
-                        </div>
-                    </div>
-                    <div>
-                        <label for="add-sub-quantity" class="block font-bold mb-2 text-xl">子数量 (可选)</label>
-                        <input type="number" id="add-sub-quantity" step="any" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" placeholder="0" aria-label="子数量">
-                    </div>
-                </div>
-
                 <div class="grid grid-cols-1 gap-6">
                     <div>
                         <label for="add-room" class="block font-bold mb-2 text-xl">房间</label>
                         <select id="add-room" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl bg-white text-black" aria-label="选择房间">
-                            <option value="厨房">厨房</option><option value="客厅">客厅</option><option value="卧室">卧室</option><option value="书房">书房</option><option value="餐厅">餐厅</option><option value="玄关">玄关</option><option value="卫生间">卫生间</option><option value="洗衣房">洗衣房</option>
+                            <option value="厨房">厨房</option>
+                            <option value="客厅">客厅</option>
+                            <option value="卧室">卧室</option>
+                            <option value="书房">书房</option>
+                            <option value="餐厅">餐厅</option>
+                            <option value="玄关">玄关</option>
+                            <option value="卫生间">卫生间</option>
+                            <option value="洗衣房">洗衣房</option>
                         </select>
                     </div>
                     <div>
                         <label for="add-location" class="block font-bold mb-2 text-xl">具体位置</label>
                         <input type="text" id="add-location" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" placeholder="如：柜子第二层" aria-label="具体位置">
                     </div>
+                </div>
+                <div>
+                    <label class="block font-bold mb-2 text-xl">初始数量</label>
+                    <button type="button" id="btn-add-qty-trigger" class="w-full p-4 border-2 border-blue-300 bg-blue-50 text-blue-900 font-bold text-left text-xl rounded-lg" aria-label="设置初始数量">
+                        当前选择：1 (点击修改)
+                    </button>
                 </div>
                 
                 <div class="flex flex-col gap-4 mt-8">
@@ -317,18 +309,7 @@
                     <label for="edit-unit" class="block font-bold mb-2 text-xl">单位</label>
                     <div class="flex gap-2">
                         <input type="text" id="edit-unit" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" aria-label="单位">
-<button type="button" id="btn-pick-unit-edit" class="bg-gray-200 text-gray-800 px-4 rounded-lg font-bold border-2 border-gray-300 whitespace-nowrap text-lg">选单位</button>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label for="edit-sub-quantity" class="block font-bold mb-2 text-xl">子数量</label>
-                        <input type="number" id="edit-sub-quantity" step="any" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" aria-label="子数量">
-                    </div>
-                    <div>
-                        <label for="edit-sub-unit" class="block font-bold mb-2 text-xl">子单位</label>
-                        <input type="text" id="edit-sub-unit" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" aria-label="子单位">
+                        <button type="button" id="btn-pick-unit-edit" class="bg-gray-200 text-gray-800 px-4 rounded-lg font-bold border-2 border-gray-300 whitespace-nowrap text-lg">选单位</button>
                     </div>
                 </div>
                 <div class="grid grid-cols-1 gap-6">
@@ -409,26 +390,14 @@
     <div id="modal-qty" class="hidden fixed inset-0 bg-black bg-opacity-80 z-50 flex justify-center items-end sm:items-center">
         <div class="bg-white w-full max-w-md p-6 rounded-t-2xl sm:rounded-2xl shadow-2xl border-t-4 border-blue-500" role="dialog" aria-modal="true" aria-labelledby="qty-title">
             <h2 id="qty-title" class="text-2xl font-bold mb-6 text-center text-gray-900 outline-none" tabindex="-1">选择数量</h2>
-<div class="grid grid-cols-5 gap-3 mb-6" id="qty-grid"></div>
-            
-            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6">
-                <div id="qty-custom-trigger" class="custom-input-trigger mb-4" role="button" tabindex="0" aria-label="点击启用自定义输入模式">
-                    <span class="font-bold text-blue-800 text-lg">点击启用自定义输入</span>
+            <div class="grid grid-cols-5 gap-3 mb-6" id="qty-grid"></div>
+            <div class="flex gap-2 mb-6 items-stretch">
+                <div id="qty-custom-trigger" class="custom-input-trigger" role="button" tabindex="0" aria-label="自定义数量">
+                    <span class="mr-2 font-bold text-gray-700 text-lg">自定义:</span>
+                    <label for="qty-custom-input" class="sr-only">输入数量</label>
+                    <input type="number" id="qty-custom-input" class="w-24 p-2 border-b-4 border-gray-400 text-center font-bold text-xl bg-gray-50 text-black" disabled placeholder="#" tabindex="-1" aria-label="输入自定义数量">
                 </div>
-
-                <div id="qty-input-group" class="flex flex-col gap-3 opacity-50 pointer-events-none transition-opacity" aria-hidden="true">
-                    <div class="flex gap-2 items-center">
-                        <label for="qty-custom-input" class="w-16 font-bold">主数量:</label>
-                        <input type="number" step="any" id="qty-custom-input" class="flex-grow p-3 border-2 border-gray-300 rounded-lg text-xl font-bold" placeholder="#" disabled>
-                        <span id="qty-display-unit" class="w-10 text-sm font-bold text-gray-500 truncate">个</span>
-                    </div>
-                    <div class="flex gap-2 items-center">
-                        <label for="qty-sub-input" class="w-16 font-bold">子数量:</label>
-                        <input type="number" step="any" id="qty-sub-input" class="flex-grow p-3 border-2 border-gray-300 rounded-lg text-xl font-bold" placeholder="#" disabled>
-                        <span id="qty-display-sub-unit" class="w-10 text-sm font-bold text-gray-500 truncate"></span>
-                    </div>
-                    <button id="btn-qty-confirm" class="w-full bg-blue-600 text-white font-bold p-3 rounded-lg shadow mt-2" disabled>确定</button>
-                </div>
+                <button id="btn-qty-confirm" class="bg-blue-600 text-white font-bold px-6 rounded-lg shadow-lg disabled:opacity-50 text-lg" disabled tabindex="-1">确定</button>
             </div>
             <button id="btn-qty-cancel" class="w-full p-4 bg-gray-200 text-gray-800 rounded-xl font-bold text-xl" onclick="closeQtyModal()">取消</button>
         </div>

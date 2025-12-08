@@ -347,21 +347,16 @@ const nickName = user.displayName || '未设置昵称';
 
             filtered.forEach(item => {
                 let card = existingMap.get(item.id);
-let tagsHtml = '';
-            if (item.tags && item.tags.length > 0) {
-                tagsHtml = `<div class="mt-2 flex flex-wrap gap-1">` + 
-                    item.tags.map(t => `<span class="px-2 py-0.5 bg-blue-100 text-blue-800 text-sm font-bold rounded-full border border-blue-200">${t}</span>`).join('') +
-                    `</div>`;
-            }
-            const tagsText = item.tags && item.tags.length > 0 ? `，标签：${item.tags.join('、')}` : '';
+                let tagsHtml = '';
+                if (item.tags && item.tags.length > 0) {
+                    tagsHtml = `<div class="mt-2 flex flex-wrap gap-1">` + 
+                        item.tags.map(t => `<span class="px-2 py-0.5 bg-blue-100 text-blue-800 text-sm font-bold rounded-full border border-blue-200">${t}</span>`).join('') +
+                        `</div>`;
+                }
+                const tagsText = item.tags && item.tags.length > 0 ? `，标签：${item.tags.join('、')}` : '';
 
-            // 新增：构建子数量显示文本
-            let subText = '';
-            if (item.subQuantity && parseFloat(item.subQuantity) !== 0) {
-                subText = ` ${parseFloat(item.subQuantity)} <span class="text-sm text-gray-500">${item.subUnit || ''}</span>`;
-            }
-
-            const labelText = `${item.name}，分类：${item.category}，位于${item.room} ${item.location||''}，数量${item.quantity}${item.unit||'个'} ${item.subQuantity ? item.subQuantity + (item.subUnit||'') : ''}${tagsText}`;
+                const labelText = `${item.name}，分类：${item.category}，位于${item.room} ${item.location||''}，数量${item.quantity}${item.unit||'个'}${tagsText}`;
+                
                 const htmlContent = `
                     <div class="flex flex-col gap-1 pointer-events-none">
                         <div class="flex justify-between items-start">
@@ -370,12 +365,9 @@ let tagsHtml = '';
                                     ${item.name}
                                     <span class="text-sm font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded border border-gray-300">${item.category}</span>
                                 </h3>
-<p class="text-base text-gray-600 font-bold item-loc mt-1">${item.room} - ${item.location || '位置未填'}</p>
+                                <p class="text-base text-gray-600 font-bold item-loc mt-1">${item.room} - ${item.location || '位置未填'}</p>
                             </div>
-                            <div class="flex flex-col items-end">
-                                <div class="text-3xl font-bold text-blue-700 item-qty whitespace-nowrap">${item.quantity} <span class="text-lg text-gray-500">${item.unit||'个'}</span></div>
-                                <div class="text-xl font-bold text-blue-600 item-sub-qty whitespace-nowrap">${subText}</div>
-                            </div>
+                            <div class="text-3xl font-bold text-blue-700 item-qty whitespace-nowrap">${item.quantity} <span class="text-lg text-gray-500">${item.unit||'个'}</span></div>
                         </div>
                         ${tagsHtml}
                     </div>
@@ -481,9 +473,8 @@ let tagsHtml = '';
                 bubble.className = 'tag-bubble';
                 bubble.innerHTML = `${tag} <span class="tag-remove" role="button" tabindex="0" aria-label="删除标签 ${tag}">×</span>`;
                 const delBtn = bubble.querySelector('.tag-remove');
-const delHandler = (e) => { 
-                    e.preventDefault(); // 阻止表单提交
-                    e.stopPropagation();
+                const delHandler = (e) => { 
+                    e.stopPropagation(); 
                     if(e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
                     removeTag(tag, containerId, inputId); 
                 };
@@ -549,69 +540,50 @@ const delHandler = (e) => {
             btn.setAttribute('aria-label', `当前数量 ${pendingAddQty}，点击修改`);
         }
 
-document.getElementById('btn-nav-add').addEventListener('click', () => { 
+        document.getElementById('btn-nav-add').addEventListener('click', () => { 
             switchScreen('screen-add'); 
             document.getElementById('add-name').focus(); 
-            document.getElementById('add-quantity').value = 1;
+            pendingAddQty = 1; 
             pendingTags = []; 
             renderTags('add-tags-container', 'add-tags-input');
+            updateAddQtyDisplay(); 
         });
+        
         document.getElementById('btn-back-add').addEventListener('click', () => switchScreen('screen-home'));
         document.getElementById('btn-nav-data').addEventListener('click', () => switchScreen('screen-data'));
         document.getElementById('btn-back-data').addEventListener('click', () => switchScreen('screen-home'));
-
-        // 单位选择逻辑
-        function openUnitPicker(targetId) {
-            const grid = document.getElementById('unit-grid');
-            grid.innerHTML = '';
-            UNIT_LIST.forEach(u => {
-                const btn = document.createElement('button');
-                btn.className = "grid-btn";
-                btn.textContent = u;
-                btn.onclick = () => {
-                    document.getElementById(targetId).value = u;
-                    closeUnitModal();
-                };
-                grid.appendChild(btn);
+        
+        document.getElementById('btn-add-qty-trigger').addEventListener('click', () => {
+            openQtyPicker("初始数量", (val) => {
+                pendingAddQty = val;
+                updateAddQtyDisplay();
             });
-            document.getElementById('modal-unit').classList.remove('hidden');
-            announce("请选择单位");
-        }
-        function closeUnitModal() { document.getElementById('modal-unit').classList.add('hidden'); }
-        document.getElementById('btn-pick-unit-add').onclick = () => openUnitPicker('add-unit');
-document.getElementById('btn-pick-sub-unit-add').onclick = () => openUnitPicker('add-sub-unit');
-        document.getElementById('btn-pick-unit-edit').onclick = () => openUnitPicker('edit-unit');
+        });
 
-        // 新增物品提交逻辑 (修复版)
+        // 修改: 提交后不跳转，重置表单并聚焦 Name 输入框
         document.getElementById('form-add').addEventListener('submit', async (e) => {
             e.preventDefault();
-const name = document.getElementById('add-name').value.trim();
+            const name = document.getElementById('add-name').value.trim();
             if(!name) return;
             
-            const mainQ = parseFloat(document.getElementById('add-quantity').value) || 0;
-            const subQ = parseFloat(document.getElementById('add-sub-quantity').value) || 0;
-            const subU = document.getElementById('add-sub-unit').value.trim();
-
             try {
                 await addDoc(itemsRef, {
                     name: name,
                     category: document.getElementById('add-category').value,
                     tags: pendingTags,
                     unit: document.getElementById('add-unit').value,
-room: document.getElementById('add-room').value,
+                    room: document.getElementById('add-room').value,
                     location: document.getElementById('add-location').value,
-                    quantity: mainQ,
-                    subQuantity: subQ,
-uid: auth.currentUser.uid, 
-                    updatedAt: serverTimestamp() 
+                    quantity: pendingAddQty,
+                    uid: auth.currentUser.uid,
+                    updatedAt: serverTimestamp()
                 });
-                announce(`已添加 ${name}`);
-                
-                // 重置表单
+                announce("添加成功");
                 document.getElementById('form-add').reset();
-                pendingTags = []; 
+                pendingAddQty = 1;
+                pendingTags = [];
                 renderTags('add-tags-container', 'add-tags-input');
-                document.getElementById('add-quantity').value = 1;
+                updateAddQtyDisplay();
                 document.getElementById('add-name').focus();
             } catch(err) {
                 announce("添加失败");
@@ -619,289 +591,332 @@ uid: auth.currentUser.uid,
             }
         });
 
-        // --- Helper: Modals ---
-        function closeModals() {
-            document.querySelectorAll('[id^="modal-"]').forEach(el => el.classList.add('hidden'));
-            document.getElementById('menu-account-dropdown').classList.add('hidden');
-            document.getElementById('btn-account-menu').setAttribute('aria-expanded', 'false');
+        document.getElementById('btn-cancel-add').addEventListener('click', () => {
+            switchScreen('screen-home');
+            announce("已取消");
+        });
+
+        function cancelEdit() {
+            playSound('click');
+            if(currentActionItem) focusTargetId = currentActionItem.id;
+            switchScreen('screen-' + previousScreen);
         }
-        window.closeModals = closeModals; // Expose globally
-        window.closeUnitModal = closeUnitModal; 
+        document.getElementById('btn-back-edit').addEventListener('click', cancelEdit);
+        document.getElementById('btn-cancel-edit-form').addEventListener('click', cancelEdit);
 
-        function openGenericConfirm(msg, onConfirm) {
-            document.getElementById('confirm-text').textContent = msg;
-            document.getElementById('modal-confirm').classList.remove('hidden');
-            const btnOk = document.getElementById('btn-confirm-ok');
-            // 移除旧监听器，防止重复触发
-            const newBtn = btnOk.cloneNode(true);
-            btnOk.parentNode.replaceChild(newBtn, btnOk);
-            newBtn.addEventListener('click', onConfirm);
-            newBtn.focus();
+// Unit Picker
+        let unitTargetInput = null;
+        let unitTriggerBtnId = null; 
+        const unitGrid = document.getElementById('unit-grid');
+        
+        function initUnitGrid() {
+            unitGrid.innerHTML = '';
+            const allBtns = [];
+            
+            // 强制绑定取消按钮 (修复点击无响应问题)
+            const btnCancel = document.getElementById('btn-unit-cancel');
+            btnCancel.onclick = () => window.closeUnitModal();
+
+            UNIT_LIST.forEach((u, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'grid-btn'; 
+                btn.textContent = u;
+                // 核心交互：仅第一个元素可被Tab聚焦，其余为-1 (游走焦点)
+                btn.tabIndex = (index === 0) ? 0 : -1;
+
+                // 键盘导航：上下左右键
+                btn.addEventListener('keydown', (e) => {
+                    if (['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
+                        e.preventDefault();
+                        const idx = allBtns.indexOf(e.target);
+                        let next = idx;
+                        const total = allBtns.length;
+                        // 网格布局：每行5个
+                        if (e.key === 'ArrowRight') next = (idx + 1) % total;
+                        if (e.key === 'ArrowLeft') next = (idx - 1 + total) % total;
+                        if (e.key === 'ArrowDown') { if(idx + 5 < total) next = idx + 5; }
+                        if (e.key === 'ArrowUp') { if(idx - 5 >= 0) next = idx - 5; }
+
+                        // 转移焦点
+                        allBtns[idx].tabIndex = -1;
+                        allBtns[next].tabIndex = 0;
+                        allBtns[next].focus();
+                    }
+                });
+
+                btn.addEventListener('click', () => {
+                    if(unitTargetInput) { unitTargetInput.value = u; announce(`已选择 ${u}`); unitTargetInput.focus(); }
+                    closeUnitModal();
+                });
+                
+                allBtns.push(btn);
+                unitGrid.appendChild(btn);
+            });
         }
-        window.openGenericConfirm = openGenericConfirm;
+        window.openUnitPicker = (inputId, triggerBtnId) => {
+            playSound('click'); 
+            unitTargetInput = document.getElementById(inputId); 
+            unitTriggerBtnId = triggerBtnId; // 记录触发按钮ID
+            initUnitGrid(); 
+            document.getElementById('modal-unit').classList.remove('hidden'); 
+            document.getElementById('unit-title').focus();
+        };
 
-        // --- Action Menu Logic ---
-        function openActionMenu(item) {
-            currentActionItem = item;
-            document.getElementById('action-desc').textContent = `${item.name} (当前: ${item.quantity}${item.unit||'个'})`;
-            document.getElementById('modal-action').classList.remove('hidden');
-            document.getElementById('btn-act-put').focus();
-        }
-        // 公开给 renderList 调用
-window.openActionMenu = openActionMenu;
-
-        function handleActionClick(isPut) {
-            const item = currentActionItem;
-            const factor = isPut ? 1 : -1;
-            const actionName = isPut ? "放入" : "取出";
-
-            if (!item.subUnit) {
-                openQtyPicker(`${actionName}数量 (${item.unit||'个'})`, (m) => handleUpdate(m * factor, 0));
-                return;
+        // 修改：关闭时将焦点还给触发按钮
+        window.closeUnitModal = () => { 
+            document.getElementById('modal-unit').classList.add('hidden'); 
+            if(unitTriggerBtnId) {
+                const btn = document.getElementById(unitTriggerBtnId);
+                if(btn) btn.focus();
             }
+        };
+document.getElementById('btn-pick-unit-add').addEventListener('click', () => openUnitPicker('add-unit', 'btn-pick-unit-add'));
+        document.getElementById('btn-pick-unit-edit').addEventListener('click', () => openUnitPicker('edit-unit', 'btn-pick-unit-edit'));
 
-            const m = document.getElementById('modal-confirm');
-            document.getElementById('title-confirm').textContent = `请选择${actionName}单位`;
-            document.getElementById('confirm-text').textContent = `该物品包含主单位（${item.unit}）和子单位（${item.subUnit}），请选择要${actionName}哪种？`;
-            
-            const btnMain = document.getElementById('btn-confirm-ok');
-            const btnSub = document.getElementById('btn-confirm-cancel');
-            
-            // 临时修改按钮文本
-            btnMain.textContent = `按 ${item.unit} ${actionName}`;
-            btnSub.textContent = `按 ${item.subUnit} ${actionName}`;
-            
-            // 备份并修改样式
-            const originalSubClass = btnSub.className;
-            btnSub.className = "flex-1 p-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow";
+        // Edit Execution
+        document.getElementById('form-edit').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const newQty = parseInt(document.getElementById('edit-quantity').value);
+            const unitVal = document.getElementById('edit-unit').value;
+            learnNewUnit(unitVal);
+            if (newQty === 0) { openZeroConfirmEdit(newQty); return; }
+            await executeEdit(newQty);
+        });
 
-            const cleanup = () => {
-                m.classList.add('hidden');
-                btnMain.textContent = "确认执行";
-                btnSub.textContent = "取消";
-                btnSub.className = originalSubClass;
-            };
-
-            const newBtnMain = btnMain.cloneNode(true);
-            const newBtnSub = btnSub.cloneNode(true);
-            btnMain.parentNode.replaceChild(newBtnMain, btnMain);
-            btnSub.parentNode.replaceChild(newBtnSub, btnSub);
-
-            newBtnMain.onclick = () => {
-                cleanup();
-                openQtyPicker(`${actionName}${item.unit}`, (val) => handleUpdate(val * factor, 0));
-            };
-
-            newBtnSub.onclick = () => {
-                cleanup();
-                openQtyPicker(`${actionName}${item.subUnit}`, (val) => handleUpdate(0, val * factor));
-            };
-
-            m.classList.remove('hidden');
-            newBtnMain.focus();
+        async function executeEdit(newQty) {
+            focusTargetId = currentActionItem.id; 
+            try {
+                await updateDoc(doc(db, "items", currentActionItem.id), {
+                    name: document.getElementById('edit-name').value,
+                    category: document.getElementById('edit-category').value, 
+                    tags: pendingTags, 
+                    room: document.getElementById('edit-room').value,
+                    location: document.getElementById('edit-location').value,
+                    unit: document.getElementById('edit-unit').value,
+                    quantity: newQty,
+                    updatedAt: serverTimestamp()
+                });
+                announce("修改成功");
+                switchScreen('screen-' + previousScreen);
+            } catch(e) { announce("失败"); }
         }
 
-        document.getElementById('btn-act-put').onclick = () => handleActionClick(true);
-        document.getElementById('btn-act-take').onclick = () => handleActionClick(false);
-        document.getElementById('btn-act-edit').onclick = () => {
-            closeModals();
+        function openZeroConfirmEdit(newQty) {
+            const m = document.getElementById('modal-zero'); playSound('error'); m.classList.remove('hidden'); setTimeout(() => document.getElementById('title-zero').focus(), 100);
+            document.getElementById('btn-zero-keep').onclick = async () => { m.classList.add('hidden'); await executeEdit(0); };
+            document.getElementById('btn-zero-del').onclick = async () => { m.classList.add('hidden'); await execDelete(); switchScreen('screen-' + previousScreen); };
+            document.getElementById('btn-zero-cancel').onclick = () => { m.classList.add('hidden'); announce("已取消"); };
+        }
+
+        // Action Menu
+        function openActionMenu(item) {
+            playSound('click');
+            const freshItem = allItems.find(i => i.id === item.id) || item;
+            currentActionItem = freshItem;
+            const modal = document.getElementById('modal-action');
+            document.getElementById('action-title').textContent = `管理：${freshItem.name}`;
+            document.getElementById('action-desc').textContent = `分类：${freshItem.category} | 剩余：${freshItem.quantity} ${freshItem.unit||'个'}`;
+            const btnPut = document.getElementById('btn-act-put');
+            if (currentScreen === 'takeout') btnPut.classList.add('hidden'); else btnPut.classList.remove('hidden'); 
+            modal.classList.remove('hidden');
+            setTimeout(() => { const v = modal.querySelectorAll('button:not(.hidden)'); if(v.length > 0) v[0].focus(); }, 100);
+        }
+        document.getElementById('action-buttons-container').addEventListener('click', (e) => {
+            const btn = e.target.closest('button'); if (!btn) return;
+            const act = btn.dataset.action;
+            if (act === 'put') openQtyPicker("放入数量", (n) => handleUpdate(n));
+            if (act === 'take') openQtyPicker("取出数量", (n) => handleUpdate(-n));
+            if (act === 'delete') openGenericConfirm(`确定删除 ${currentActionItem.name} 吗？`, execDelete);
+            if (act === 'edit') openEditScreen(currentActionItem);
+        });
+
+        function openEditScreen(item) {
+            document.getElementById('modal-action').classList.add('hidden');
             switchScreen('screen-edit');
-            
-            // 回显数据 (Step 6)
-            const item = currentActionItem;
             document.getElementById('edit-name').value = item.name;
             const catSelect = document.getElementById('edit-category');
             catSelect.value = item.category || '其他杂项';
-            
+            if(catSelect.value === '') catSelect.value = '其他杂项';
+
             document.getElementById('edit-room').value = item.room;
             document.getElementById('edit-location').value = item.location;
             document.getElementById('edit-unit').value = item.unit || '个';
-            
-            // 回显主数量和子数量
             document.getElementById('edit-quantity').value = item.quantity;
-            document.getElementById('edit-sub-quantity').value = item.subQuantity || '';
-            document.getElementById('edit-sub-unit').value = item.subUnit || '';
-
             pendingTags = [...(item.tags || [])];
             renderTags('edit-tags-container', 'edit-tags-input');
-        };
+        }
 
-        document.getElementById('btn-act-del').onclick = () => {
-            openGenericConfirm(`确定删除 ${currentActionItem.name} 吗？`, async () => {
-                await deleteDoc(doc(db, "items", currentActionItem.id));
-                announce("已删除"); closeModals();
-            });
-        };
-
-        // --- Edit Form Submit (Step 7) ---
-        document.getElementById('form-edit').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const newQty = parseFloat(document.getElementById('edit-quantity').value);
-            const newSubQty = parseFloat(document.getElementById('edit-sub-quantity').value) || 0;
-            const newSubUnit = document.getElementById('edit-sub-unit').value.trim();
-
-            try {
-                await updateDoc(doc(db, "items", currentActionItem.id), {
-                    name: document.getElementById('edit-name').value.trim(),
-                    category: document.getElementById('edit-category').value,
-                    tags: pendingTags,
-                    unit: document.getElementById('edit-unit').value,
-                    room: document.getElementById('edit-room').value,
-                    location: document.getElementById('edit-location').value,
-                    quantity: newQty,
-                    subQuantity: newSubQty,
-                    subUnit: newSubUnit,
-                    updatedAt: serverTimestamp()
-                });
-                announce("修改成功"); 
-                switchScreen(previousScreen);
-            } catch(err) { announce("修改失败"); console.error(err); }
-        });
-        document.getElementById('btn-cancel-edit-form').addEventListener('click', () => switchScreen(previousScreen));
-
-        // --- Quantity Picker Logic (Step 8) ---
+// Qty Picker (Fixed Focus Logic)
         let qtyCallback = null;
+        const qtyGrid = document.getElementById('qty-grid');
+        const qtyBtns = [];
+
+        // 绑定取消按钮 (修复点击无效问题)
+        // 注意：closeQtyModal 是函数声明，会被提升，因此可以直接调用
+        document.getElementById('btn-qty-cancel').addEventListener('click', closeQtyModal);
+        
+        qtyGrid.innerHTML = '';
+        for(let i=1; i<=10; i++) {
+            const btn = document.createElement('button'); 
+            btn.className = 'grid-btn'; 
+            btn.textContent = i;
+            // 核心交互：仅数字1可被Tab聚焦
+            btn.tabIndex = (i === 1) ? 0 : -1; 
+
+            // 键盘导航：上下左右
+            btn.addEventListener('keydown', (e) => {
+                if (['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
+                    e.preventDefault();
+                    const idx = qtyBtns.indexOf(e.target);
+                    let next = idx;
+                    const total = 10;
+                    
+                    if (e.key === 'ArrowRight') next = (idx + 1) % total;
+                    if (e.key === 'ArrowLeft') next = (idx - 1 + total) % total;
+                    if (e.key === 'ArrowDown') { if (idx + 5 < total) next = idx + 5; }
+                    if (e.key === 'ArrowUp') { if (idx - 5 >= 0) next = idx - 5; }
+                    
+                    qtyBtns[idx].tabIndex = -1;
+                    qtyBtns[next].tabIndex = 0;
+                    qtyBtns[next].focus();
+                }
+            });
+
+            const handler = (e) => { 
+                if(e.type === 'keydown' && e.key !== 'Enter') return;
+                e.preventDefault(); e.stopPropagation(); 
+                submitQty(i); 
+            };
+            btn.addEventListener('click', handler); 
+            // 允许 Space/Enter 触发
+            btn.addEventListener('keydown', (e) => {
+                if(e.key === 'Enter') handler(e);
+            });
+            
+            qtyBtns.push(btn);
+            qtyGrid.appendChild(btn);
+        }
         function openQtyPicker(title, cb) {
             playSound('click'); qtyCallback = cb;
             document.getElementById('qty-title').textContent = title;
             document.getElementById('modal-action').classList.add('hidden'); document.getElementById('modal-qty').classList.remove('hidden');
-            
-            // 显示当前单位
-            const unitLabel = currentActionItem ? (currentActionItem.unit || '个') : '个';
-            const subUnitLabel = currentActionItem ? (currentActionItem.subUnit || '') : '';
-            document.getElementById('qty-display-unit').textContent = unitLabel;
-            document.getElementById('qty-display-sub-unit').textContent = subUnitLabel;
-
-            const inputMain = document.getElementById('qty-custom-input'); 
-            const inputSub = document.getElementById('qty-sub-input');
-            const confirm = document.getElementById('btn-qty-confirm'); 
-            const trigger = document.getElementById('qty-custom-trigger');
-            const group = document.getElementById('qty-input-group');
-
-            // 重置状态
-            inputMain.value = ''; inputSub.value = ''; 
-            inputMain.disabled = true; inputSub.disabled = true; 
-            confirm.disabled = true; 
-            
-            group.classList.add('opacity-50', 'pointer-events-none');
-            group.setAttribute('aria-hidden', 'true');
-            
-            trigger.classList.remove('hidden');
-            trigger.setAttribute('tabindex', '0');
-
-            // 渲染快捷按钮 (仅针对主数量)
-            const grid = document.getElementById('qty-grid');
-            grid.innerHTML = '';
-            [1, 2, 3, 4, 5].forEach(n => {
-                const btn = document.createElement('button');
-                btn.className = "grid-btn";
-                btn.textContent = n;
-                btn.onclick = () => submitQty(n, 0); // 快捷键只改变主数量
-                grid.appendChild(btn);
-            });
-            
-            // 聚焦
-            setTimeout(() => { 
-                if(grid.firstChild) grid.firstChild.focus(); 
-                announce("请选择数量"); 
-            }, 100);
+            const input = document.getElementById('qty-custom-input'); const confirm = document.getElementById('btn-qty-confirm'); const trigger = document.getElementById('qty-custom-trigger');
+            input.value = ''; input.disabled = true; confirm.disabled = true; confirm.classList.add('opacity-50'); confirm.setAttribute('tabindex', '-1'); trigger.setAttribute('tabindex', '0');
+            setTimeout(() => { qtyGrid.firstChild.focus(); announce("请选择数量"); }, 100);
         }
-        window.openQtyPicker = openQtyPicker; // Expose global
-        window.closeQtyModal = () => document.getElementById('modal-qty').classList.add('hidden');
-
-        // 自定义输入激活
         const customTrigger = document.getElementById('qty-custom-trigger');
         function activateInput() {
-            const inputMain = document.getElementById('qty-custom-input'); 
-            const inputSub = document.getElementById('qty-sub-input');
-            const confirm = document.getElementById('btn-qty-confirm'); 
-            const trigger = document.getElementById('qty-custom-trigger');
-            const group = document.getElementById('qty-input-group');
-
-            trigger.setAttribute('tabindex', '-1'); 
-            trigger.classList.add('hidden'); // 隐藏触发器
-
-            group.classList.remove('opacity-50', 'pointer-events-none');
-            group.setAttribute('aria-hidden', 'false');
-
-            inputMain.disabled = false; 
-            inputSub.disabled = false; 
-            confirm.disabled = false; 
-            
-            inputMain.focus(); 
-            announce("请输入数量");
+            const input = document.getElementById('qty-custom-input'); const confirm = document.getElementById('btn-qty-confirm'); const trigger = document.getElementById('qty-custom-trigger');
+            trigger.setAttribute('tabindex', '-1'); input.disabled = false; input.focus(); confirm.disabled = false; confirm.classList.remove('opacity-50'); confirm.setAttribute('tabindex', '0'); announce("请输入数字");
         }
         customTrigger.addEventListener('click', activateInput);
-        customTrigger.addEventListener('keydown', (e) => { if(e.key === 'Enter') activateInput(); });
-
-        document.getElementById('qty-custom-input').addEventListener('keydown', (e) => { 
-            if(e.key === 'Enter' || e.keyCode === 13) { 
-                e.preventDefault(); e.stopPropagation(); 
-                document.getElementById('qty-sub-input').focus(); 
-            } 
-        });
-        document.getElementById('qty-sub-input').addEventListener('keydown', (e) => { 
-            if(e.key === 'Enter' || e.keyCode === 13) { 
-                e.preventDefault(); e.stopPropagation(); 
-                document.getElementById('btn-qty-confirm').click();
-            } 
-        });
-
-        document.getElementById('btn-qty-confirm').addEventListener('click', () => { 
-            const mainVal = parseFloat(document.getElementById('qty-custom-input').value) || 0;
-            const subVal = parseFloat(document.getElementById('qty-sub-input').value) || 0;
-            submitQty(mainVal, subVal); 
-        });
+        customTrigger.addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.keyCode === 13) { e.preventDefault(); e.stopPropagation(); activateInput(); } });
+        document.getElementById('qty-custom-input').addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.keyCode === 13) { e.preventDefault(); e.stopPropagation(); submitQty(parseInt(e.target.value)); } });
+        document.getElementById('btn-qty-confirm').addEventListener('click', () => { submitQty(parseInt(document.getElementById('qty-custom-input').value)); });
         
-        function submitQty(mainVal, subVal = 0) { 
-            if (mainVal <= 0 && subVal <= 0) { announce("数量无效"); return; } 
-            if (qtyCallback) qtyCallback(mainVal, subVal); 
+        function submitQty(val) { 
+            if (!val || val <= 0) { announce("无效数量"); return; } 
+            if (qtyCallback) qtyCallback(val); 
             document.getElementById('modal-qty').classList.add('hidden');
             
+            // 修复焦点 BUG 2: 在新增界面，焦点归还给触发器，而不是走通用的 closeModals
             if (currentScreen === 'add') {
                 document.getElementById('btn-add-qty-trigger').focus();
             } else {
                 closeModals();
             }
         }
-
-        // --- Update Logic (Step 9) ---
-        async function handleUpdate(changeMain, changeSub = 0) {
-            if (!currentActionItem) return;
-            const newQty = currentActionItem.quantity + changeMain;
-            // 只有当主数量变为0且确实有主数量变动时，才触发“归零确认”
-            if (newQty === 0 && changeMain !== 0) { openZeroConfirm(); return; }
-            if (newQty < 0) { announce("库存不足"); return; }
-            await execUpdate(changeMain, changeSub);
+        
+        function closeQtyModal() { 
+            document.getElementById('modal-qty').classList.add('hidden'); 
+            // 修复焦点 BUG 2: 取消时同样处理
+            if (currentScreen === 'add') {
+                document.getElementById('btn-add-qty-trigger').focus();
+            } else {
+                closeModals(); 
+            }
         }
 
-        async function execUpdate(changeMain, changeSub = 0) {
+        window.closeModals = () => {
+            document.querySelectorAll('[id^="modal-"]').forEach(m => m.classList.add('hidden'));
+            const containerId = (currentScreen === 'results') ? 'results-list' : (currentScreen === 'takeout' ? 'takeout-list' : 'home-list');
+            const container = document.getElementById(containerId);
+            if (currentActionItem && currentActionItem.id) {
+                const target = container.querySelector(`.item-card[data-id="${currentActionItem.id}"]`);
+                if (target) { target.focus(); return; }
+            }
+            const first = container.querySelector('.item-card');
+            if (first) first.focus();
+        };
+
+        async function handleUpdate(change) {
+            if (!currentActionItem) return;
+            const newQty = currentActionItem.quantity + change;
+            if (newQty === 0) { openZeroConfirm(); return; }
+            if (newQty < 0) { announce("库存不足"); return; }
+            await execUpdate(change);
+        }
+        async function execUpdate(change) {
             focusTargetId = currentActionItem.id;
             try {
-                await updateDoc(doc(db, "items", currentActionItem.id), { 
-                    quantity: increment(changeMain), 
-                    subQuantity: increment(changeSub),
-                    updatedAt: serverTimestamp() 
-                });
+                await updateDoc(doc(db, "items", currentActionItem.id), { quantity: increment(change), updatedAt: serverTimestamp() });
                 announce("更新成功"); closeModals();
             } catch(e) { announce("失败"); }
         }
-
         function openZeroConfirm() {
-            const m = document.getElementById('modal-zero');
-            m.classList.remove('hidden');
-            document.getElementById('btn-zero-keep').onclick = async () => { 
-                m.classList.add('hidden'); 
-                // 保留模式：只清空主数量（设为0），子数量不动？
-                // 为了简化，我们只更新主数量使其归零。
-                // 此时 currentActionItem.quantity + changeMain = 0.
-                // 所以 changeMain = -currentActionItem.quantity
-                await execUpdate(-currentActionItem.quantity, 0); 
-            };
-            document.getElementById('btn-zero-del').onclick = async () => { m.classList.add('hidden'); await deleteDoc(doc(db, "items", currentActionItem.id)); announce("已删除"); };
-            document.getElementById('btn-zero-cancel').onclick = () => { m.classList.add('hidden'); };
-            setTimeout(() => document.getElementById('btn-zero-keep').focus(), 100);
+            const m = document.getElementById('modal-zero'); playSound('error'); m.classList.remove('hidden'); setTimeout(() => document.getElementById('title-zero').focus(), 100);
+            document.getElementById('btn-zero-keep').onclick = async () => { m.classList.add('hidden'); await execUpdate(-currentActionItem.quantity); };
+            document.getElementById('btn-zero-del').onclick = async () => { m.classList.add('hidden'); await execDelete(); };
+            document.getElementById('btn-zero-cancel').onclick = () => { m.classList.add('hidden'); announce("已取消"); closeModals(); };
         }
+        let confirmCallback = null;
+        function openGenericConfirm(msg, cb) {
+            document.getElementById('modal-action').classList.add('hidden'); const m = document.getElementById('modal-confirm'); playSound('error');
+            m.classList.remove('hidden'); document.getElementById('confirm-text').textContent = msg; confirmCallback = cb; setTimeout(() => document.getElementById('title-confirm').focus(), 100);
+        }
+        document.getElementById('btn-confirm-ok').addEventListener('click', () => { if(confirmCallback) confirmCallback(); document.getElementById('modal-confirm').classList.add('hidden'); });
+        document.getElementById('btn-confirm-cancel').addEventListener('click', () => closeModals());
+        async function execDelete() { try { await deleteDoc(doc(db, "items", currentActionItem.id)); announce("已删除"); closeModals(); } catch(e) { announce("删除失败"); } }
+
+        // Export/Import
+        document.getElementById('btn-export').addEventListener('click', () => {
+            let csvContent = "\uFEFF物品名称,分类,标签,房间,具体位置,数量,单位\n"; 
+            allItems.forEach(item => { 
+                const tagsStr = (item.tags || []).join(';');
+                csvContent += `${item.name},${item.category},${tagsStr},${item.room},${item.location || ''},${item.quantity},${item.unit||'个'}\n`; 
+            });
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `物品备份_${new Date().toISOString().slice(0,10)}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); announce("导出成功");
+        });
+        document.getElementById('btn-download-template').addEventListener('click', () => {
+            const csvContent = "\uFEFF物品名称(必填),分类,标签(用分号隔开),房间(必填),具体位置,数量(数字),单位\n大米,食品饮料,粮食;主食,厨房,米桶,1,袋\n洗发水,个人护理,洗护;日常,卫生间,架子,1,瓶"; 
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `导入模板.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); announce("模板下载成功");
+        });
+        document.getElementById('btn-trigger-upload').addEventListener('click', () => document.getElementById('file-upload').click());
+        document.getElementById('file-upload').addEventListener('change', (e) => {
+            const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
+            reader.onload = async (e) => {
+                const text = e.target.result; const rows = text.split('\n'); let count = 0;
+                for (let i = 1; i < rows.length; i++) {
+                    const row = rows[i].trim(); if (!row) continue; const cols = row.split(','); if (cols.length < 1) continue; const name = cols[0]?.trim(); if(!name) continue;
+                    
+                    const cat = cols[1]?.trim() || '其他杂项';
+                    const tagStr = cols[2]?.trim() || '';
+                    const tags = tagStr ? tagStr.split(';').map(t => t.trim()).filter(t=>t) : [];
+
+                    await addDoc(itemsRef, { 
+                        name: name, 
+                        category: cat,
+                        tags: tags,
+                        room: cols[3]?.trim() || '客厅', 
+                        location: cols[4]?.trim() || '', 
+                        quantity: parseInt(cols[5]) || 1, 
+                        unit: cols[6]?.trim() || '个', 
+                        uid: auth.currentUser.uid, 
+                        updatedAt: serverTimestamp() 
+                    }); count++;
+                } announce(`导入 ${count} 个物品`); switchScreen('screen-home');
+            }; reader.readAsText(file);
+        });
 
 // --- Settings & Tabs Logic ---
         document.getElementById('btn-settings').addEventListener('click', () => {
