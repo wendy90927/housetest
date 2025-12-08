@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>家庭物品管家V1.99</title>
+    <title>家庭物品管家V1.98</title>
     <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -245,18 +245,14 @@
                         <input type="checkbox" id="add-enable-subunit" class="w-6 h-6 text-blue-600 rounded">
                         <span class="font-bold text-lg text-gray-800">启用拆零 (如：1箱有24瓶)</span>
                     </label>
-<div id="add-subunit-area" class="hidden flex flex-col gap-4 mt-4 pl-2 border-l-4 border-blue-200">
+                    <div id="add-subunit-area" class="hidden flex flex-col gap-4 mt-4 pl-2 border-l-4 border-blue-200">
                         <div>
                             <label for="add-sub-name" class="block font-bold mb-1 text-lg">子单位 (小单位，如：瓶)</label>
-                            <div class="flex gap-2">
-                                <input type="text" id="add-sub-name" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg" placeholder="瓶" aria-label="子单位名称">
-                                <button type="button" id="btn-pick-unit-sub-add" class="bg-gray-200 text-gray-800 px-4 rounded-lg font-bold border-2 border-gray-300 whitespace-nowrap text-lg">选单位</button>
-                            </div>
+                            <input type="text" id="add-sub-name" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg" placeholder="瓶" aria-label="子单位名称">
                         </div>
                         <div>
                             <label for="add-sub-capacity" class="block font-bold mb-1 text-lg">换算：1个主单位等于多少子单位?</label>
                             <input type="number" id="add-sub-capacity" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg" placeholder="24" aria-label="换算比例">
-                            <p class="text-sm text-gray-500 mt-1 font-bold">例如1箱有24瓶，则填入24</p>
                         </div>
                     </div>
                 </div>
@@ -328,16 +324,11 @@
                 </div>
 
                 <div>
-<label for="edit-unit" class="block font-bold mb-2 text-xl">主单位</label>
+                    <label for="edit-unit" class="block font-bold mb-2 text-xl">单位</label>
                     <div class="flex gap-2">
                         <input type="text" id="edit-unit" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" aria-label="单位">
-                        <button type="button" id="btn-pick-unit-edit" class="bg-gray-200 text-gray-800 px-4 rounded-lg font-bold border-2 border-gray-300 whitespace-nowrap text-lg">选单位</button>
+<button type="button" id="btn-pick-unit-edit" class="bg-gray-200 text-gray-800 px-4 rounded-lg font-bold border-2 border-gray-300 whitespace-nowrap text-lg">选单位</button>
                     </div>
-                </div>
-
-                <div>
-                    <label for="edit-quantity" class="block font-bold mb-2 text-xl">主数量 (直接修改)</label>
-                    <input type="number" id="edit-quantity" class="w-full p-4 border-2 border-blue-300 bg-blue-50 text-blue-900 font-bold text-xl rounded-lg" aria-label="数量">
                 </div>
 
                 <div class="mt-2 p-4 bg-gray-50 rounded-xl border border-gray-200">
@@ -347,16 +338,12 @@
                     </label>
                     <div id="edit-subunit-area" class="hidden flex flex-col gap-4 mt-4 pl-2 border-l-4 border-indigo-200">
                         <div>
-                            <label for="edit-sub-name" class="block font-bold mb-1 text-lg">子单位名称</label>
-                            <div class="flex gap-2">
-                                <input type="text" id="edit-sub-name" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg" aria-label="子单位名称">
-                                <button type="button" id="btn-pick-unit-sub-edit" class="bg-gray-200 text-gray-800 px-4 rounded-lg font-bold border-2 border-gray-300 whitespace-nowrap text-lg">选单位</button>
-                            </div>
+                            <label for="edit-sub-name" class="block font-bold mb-1 text-lg">大单位名称</label>
+                            <input type="text" id="edit-sub-name" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg" aria-label="大单位名称">
                         </div>
                         <div>
                             <label for="edit-sub-capacity" class="block font-bold mb-1 text-lg">包含数量</label>
                             <input type="number" id="edit-sub-capacity" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg" aria-label="换算数量">
-                            <p class="text-sm text-gray-500 mt-1 font-bold">例如1箱有24瓶，则填入24</p>
                         </div>
                     </div>
                 </div>
@@ -381,6 +368,9 @@
                     </div>
                 </div>
                 <div>
+                    <label for="edit-quantity" class="block font-bold mb-2 text-xl">数量 (直接修改)</label>
+                    <input type="number" id="edit-quantity" class="w-full p-4 border-2 border-blue-300 bg-blue-50 text-blue-900 font-bold text-xl rounded-lg" aria-label="数量">
+                </div>
                 <div class="flex flex-col gap-4 mt-8">
                     <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white p-5 rounded-lg font-bold text-2xl shadow-lg">保存修改</button>
                     <button type="button" id="btn-cancel-edit-form" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 p-4 rounded-lg font-bold text-xl border-2 border-gray-300">取消修改</button>
