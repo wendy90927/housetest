@@ -575,8 +575,10 @@ if (predictedCat) {
 
         // --- Navigation Handlers ---
         document.getElementById('btn-nav-takeout').addEventListener('click', () => switchScreen('screen-takeout'));
-        document.getElementById('btn-back-takeout').addEventListener('click', () => switchScreen('screen-home'));
-        
+document.getElementById('btn-back-takeout').addEventListener('click', () => { 
+            switchScreen('screen-home'); 
+            setTimeout(() => document.getElementById('btn-nav-takeout').focus(), 200); 
+        });
 
 document.getElementById('btn-nav-add').addEventListener('click', () => { 
             switchScreen('screen-add'); 
@@ -584,9 +586,15 @@ document.getElementById('btn-nav-add').addEventListener('click', () => {
             pendingTags = []; 
             renderTags('add-tags-container', 'add-tags-input');
         });
-        document.getElementById('btn-back-add').addEventListener('click', () => switchScreen('screen-home'));
+document.getElementById('btn-back-add').addEventListener('click', () => { 
+            switchScreen('screen-home'); 
+            setTimeout(() => document.getElementById('btn-nav-add').focus(), 200); 
+        });
         document.getElementById('btn-nav-data').addEventListener('click', () => switchScreen('screen-data'));
-document.getElementById('btn-back-data').addEventListener('click', () => switchScreen('screen-home'));
+document.getElementById('btn-back-data').addEventListener('click', () => { 
+            switchScreen('screen-home'); 
+            setTimeout(() => document.getElementById('btn-nav-data').focus(), 200); 
+        });
 
 // 修改: 提交后不跳转，重置表单并聚焦 Name 输入框
         document.getElementById('form-add').addEventListener('submit', async (e) => {
@@ -985,11 +993,16 @@ function closeQtyModal() {
         async function execDelete() { try { await deleteDoc(doc(db, "items", currentActionItem.id)); announce("已删除"); closeModals(); } catch(e) { announce("删除失败"); } }
 
         // Export/Import
-        document.getElementById('btn-export').addEventListener('click', () => {
-            let csvContent = "\uFEFF物品名称,分类,标签,房间,具体位置,数量,单位\n"; 
+document.getElementById('btn-export').addEventListener('click', () => {
+            let csvContent = "\uFEFF物品名称,分类,标签,房间,具体位置,数量,主单位,子单位,换算比例\n"; 
             allItems.forEach(item => { 
                 const tagsStr = (item.tags || []).join(';');
-                csvContent += `${item.name},${item.category},${tagsStr},${item.room},${item.location || ''},${item.quantity},${item.unit||'个'}\n`; 
+                // 还原显示数量：如果是多级单位，需要除以容量得到主数量，以便重新导入时计算正确
+                let displayQty = item.quantity;
+                if (item.subUnit && item.subCapacity > 1) {
+                    displayQty = item.quantity / item.subCapacity;
+                }
+                csvContent += `${item.name},${item.category},${tagsStr},${item.room},${item.location || ''},${displayQty},${item.unit||'个'},${item.subUnit||''},${item.subCapacity||''}\n`; 
             });
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `物品备份_${new Date().toISOString().slice(0,10)}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); announce("导出成功");
         });
