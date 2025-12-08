@@ -197,12 +197,12 @@
             </div>
         </div>
         
-        <div class="max-w-lg mx-auto w-full p-6 overflow-y-auto">
+<div class="max-w-lg mx-auto w-full p-6 overflow-y-auto">
             <form id="form-add" class="space-y-6">
                 <div>
                     <label for="add-name" class="block font-bold mb-2 text-xl">物品名称 (必填)</label>
-                    <input type="text" id="add-name" required class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" placeholder="如：洗发水" aria-label="物品名称，输入后尝试自动分类">
-                    <p class="text-sm text-gray-500 mt-1">输入名称后，系统将自动尝试推断分类和标签。</p>
+                    <input type="text" id="add-name" required class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" placeholder="如：洗发水" aria-label="物品名称">
+                    <p class="text-sm text-gray-500 mt-1">输入名称后，系统将自动尝试推断分类。</p>
                 </div>
                 
                 <div>
@@ -228,26 +228,31 @@
                 </div>
 
                 <div>
-                    <label for="add-unit" class="block font-bold mb-2 text-xl">单位</label>
+                    <label for="add-unit" class="block font-bold mb-2 text-xl">主单位 (大单位，如：箱)</label>
                     <div class="flex gap-2">
-                        <input type="text" id="add-unit" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" placeholder="如：个" value="个" aria-label="单位">
-<button type="button" id="btn-pick-unit-add" class="bg-gray-200 text-gray-800 px-4 rounded-lg font-bold border-2 border-gray-300 whitespace-nowrap text-lg">选单位</button>
+                        <input type="text" id="add-unit" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" placeholder="如：箱" value="个" aria-label="主单位">
+                        <button type="button" id="btn-pick-unit-add" class="bg-gray-200 text-gray-800 px-4 rounded-lg font-bold border-2 border-gray-300 whitespace-nowrap text-lg">选单位</button>
                     </div>
+                </div>
+
+                <div>
+                    <label for="add-quantity" class="block font-bold mb-2 text-xl">主数量 (当前有多少个主单位?)</label>
+                    <input type="number" id="add-quantity" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" value="1" step="0.01" aria-label="主数量">
                 </div>
 
                 <div class="mt-2 p-4 bg-gray-50 rounded-xl border border-gray-200">
                     <label class="flex items-center gap-3 cursor-pointer">
                         <input type="checkbox" id="add-enable-subunit" class="w-6 h-6 text-blue-600 rounded">
-                        <span class="font-bold text-lg text-gray-800">启用多级单位 (如：按箱囤货)</span>
+                        <span class="font-bold text-lg text-gray-800">启用拆零 (如：1箱有24瓶)</span>
                     </label>
                     <div id="add-subunit-area" class="hidden flex flex-col gap-4 mt-4 pl-2 border-l-4 border-blue-200">
                         <div>
-                            <label for="add-sub-name" class="block font-bold mb-1 text-lg">大单位名称 (如：箱)</label>
-                            <input type="text" id="add-sub-name" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg" placeholder="箱" aria-label="大单位名称">
+                            <label for="add-sub-name" class="block font-bold mb-1 text-lg">子单位 (小单位，如：瓶)</label>
+                            <input type="text" id="add-sub-name" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg" placeholder="瓶" aria-label="子单位名称">
                         </div>
                         <div>
-                            <label for="add-sub-capacity" class="block font-bold mb-1 text-lg">1个大单位包含多少小单位?</label>
-                            <input type="number" id="add-sub-capacity" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg" placeholder="24" aria-label="换算数量">
+                            <label for="add-sub-capacity" class="block font-bold mb-1 text-lg">换算：1个主单位等于多少子单位?</label>
+                            <input type="number" id="add-sub-capacity" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg" placeholder="24" aria-label="换算比例">
                         </div>
                     </div>
                 </div>
@@ -271,14 +276,9 @@
                         <input type="text" id="add-location" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" placeholder="如：柜子第二层" aria-label="具体位置">
                     </div>
                 </div>
-                <div>
-                    <label class="block font-bold mb-2 text-xl">初始数量</label>
-                    <button type="button" id="btn-add-qty-trigger" class="w-full p-4 border-2 border-blue-300 bg-blue-50 text-blue-900 font-bold text-left text-xl rounded-lg" aria-label="设置初始数量">
-                        当前选择：1 (点击修改)
-                    </button>
-                </div>
                 
-                <div class="flex flex-col gap-4 mt-8">
+
+<div class="flex flex-col gap-4 mt-8">
                     <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white p-5 rounded-lg font-bold text-2xl shadow-lg">保存并继续添加</button>
                     <button type="button" id="btn-cancel-add" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 p-4 rounded-lg font-bold text-xl border-2 border-gray-300">取消</button>
                 </div>
@@ -423,23 +423,26 @@
         </div>
     </div>
 
-    <div id="modal-qty" class="hidden fixed inset-0 bg-black bg-opacity-80 z-50 flex justify-center items-end sm:items-center">
+<div id="modal-qty" class="hidden fixed inset-0 bg-black bg-opacity-80 z-50 flex justify-center items-end sm:items-center">
         <div class="bg-white w-full max-w-md p-6 rounded-t-2xl sm:rounded-2xl shadow-2xl border-t-4 border-blue-500" role="dialog" aria-modal="true" aria-labelledby="qty-title">
-<h2 id="qty-title" class="text-2xl font-bold mb-4 text-center text-gray-900 outline-none" tabindex="-1">选择数量</h2>
+            <h2 id="qty-title" class="text-2xl font-bold mb-4 text-center text-gray-900 outline-none" tabindex="-1">输入数量</h2>
             
-            <div id="qty-unit-toggle" class="hidden flex justify-center gap-4 mb-4" role="radiogroup" aria-label="选择操作单位">
-                <button id="btn-qty-unit-small" class="px-4 py-2 bg-blue-600 text-white font-bold rounded-lg border-2 border-blue-600 shadow-sm text-lg" aria-checked="true" role="radio">个</button>
-                <button id="btn-qty-unit-big" class="px-4 py-2 bg-white text-gray-700 font-bold rounded-lg border-2 border-gray-300 shadow-sm text-lg" aria-checked="false" role="radio">箱</button>
+            <div id="qty-unit-toggle" class="flex justify-center gap-0 mb-6 w-full bg-gray-100 p-1 rounded-xl" role="radiogroup" aria-label="选择操作单位">
+                <button id="btn-qty-unit-small" class="flex-1 py-3 text-lg font-bold rounded-lg transition-colors border-2 border-transparent focus:z-10" aria-checked="true" role="radio">
+                    按小单位 (瓶)
+                </button>
+                <button id="btn-qty-unit-big" class="flex-1 py-3 text-lg font-bold rounded-lg transition-colors border-2 border-transparent focus:z-10" aria-checked="false" role="radio">
+                    按大单位 (箱)
+                </button>
             </div>
-            <div class="grid grid-cols-5 gap-3 mb-6" id="qty-grid"></div>
-            <div class="flex gap-2 mb-6 items-stretch">
-                <div id="qty-custom-trigger" class="custom-input-trigger" role="button" tabindex="0" aria-label="自定义数量">
-                    <span class="mr-2 font-bold text-gray-700 text-lg">自定义:</span>
-                    <label for="qty-custom-input" class="sr-only">输入数量</label>
-                    <input type="number" id="qty-custom-input" class="w-24 p-2 border-b-4 border-gray-400 text-center font-bold text-xl bg-gray-50 text-black" disabled placeholder="#" tabindex="-1" aria-label="输入自定义数量">
-                </div>
-                <button id="btn-qty-confirm" class="bg-blue-600 text-white font-bold px-6 rounded-lg shadow-lg disabled:opacity-50 text-lg" disabled tabindex="-1">确定</button>
+
+            <div class="mb-6">
+                <label for="qty-custom-input" class="sr-only">请输入数量</label>
+                <input type="number" id="qty-custom-input" class="w-full p-4 text-center text-3xl font-bold border-b-4 border-blue-500 bg-gray-50 rounded-t-lg focus:outline-none focus:bg-white text-black" placeholder="0" step="0.01">
+                <p id="qty-helper-text" class="text-center text-gray-500 mt-2 font-bold" aria-live="polite">请输入数字</p>
             </div>
+
+            <button id="btn-qty-confirm" class="w-full bg-blue-600 text-white p-4 rounded-xl font-bold text-2xl shadow-lg mb-4 hover:bg-blue-700">确认</button>
             <button id="btn-qty-cancel" class="w-full p-4 bg-gray-200 text-gray-800 rounded-xl font-bold text-xl" onclick="closeQtyModal()">取消</button>
         </div>
     </div>
