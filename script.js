@@ -717,6 +717,8 @@ document.getElementById('btn-nav-add').addEventListener('click', () => {
         };
 document.getElementById('btn-pick-unit-add').addEventListener('click', () => openUnitPicker('add-unit', 'btn-pick-unit-add'));
         document.getElementById('btn-pick-unit-edit').addEventListener('click', () => openUnitPicker('edit-unit', 'btn-pick-unit-edit'));
+document.getElementById('btn-pick-unit-sub-add').addEventListener('click', () => openUnitPicker('add-sub-name', 'btn-pick-unit-sub-add'));
+        document.getElementById('btn-pick-unit-sub-edit').addEventListener('click', () => openUnitPicker('edit-sub-name', 'btn-pick-unit-sub-edit'));
 
 // Edit Execution
         document.getElementById('form-edit').addEventListener('submit', async (e) => {
