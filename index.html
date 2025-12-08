@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>家庭物品管家V1.96</title>
+    <title>家庭物品管家V1.97</title>
     <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -231,9 +231,27 @@
                     <label for="add-unit" class="block font-bold mb-2 text-xl">单位</label>
                     <div class="flex gap-2">
                         <input type="text" id="add-unit" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" placeholder="如：个" value="个" aria-label="单位">
-                        <button type="button" id="btn-pick-unit-add" class="bg-gray-200 text-gray-800 px-4 rounded-lg font-bold border-2 border-gray-300 whitespace-nowrap text-lg">选单位</button>
+<button type="button" id="btn-pick-unit-add" class="bg-gray-200 text-gray-800 px-4 rounded-lg font-bold border-2 border-gray-300 whitespace-nowrap text-lg">选单位</button>
                     </div>
                 </div>
+
+                <div class="mt-2 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" id="add-enable-subunit" class="w-6 h-6 text-blue-600 rounded">
+                        <span class="font-bold text-lg text-gray-800">启用多级单位 (如：按箱囤货)</span>
+                    </label>
+                    <div id="add-subunit-area" class="hidden flex flex-col gap-4 mt-4 pl-2 border-l-4 border-blue-200">
+                        <div>
+                            <label for="add-sub-name" class="block font-bold mb-1 text-lg">大单位名称 (如：箱)</label>
+                            <input type="text" id="add-sub-name" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg" placeholder="箱" aria-label="大单位名称">
+                        </div>
+                        <div>
+                            <label for="add-sub-capacity" class="block font-bold mb-1 text-lg">1个大单位包含多少小单位?</label>
+                            <input type="number" id="add-sub-capacity" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg" placeholder="24" aria-label="换算数量">
+                        </div>
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-1 gap-6">
                     <div>
                         <label for="add-room" class="block font-bold mb-2 text-xl">房间</label>
@@ -309,9 +327,27 @@
                     <label for="edit-unit" class="block font-bold mb-2 text-xl">单位</label>
                     <div class="flex gap-2">
                         <input type="text" id="edit-unit" class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl" aria-label="单位">
-                        <button type="button" id="btn-pick-unit-edit" class="bg-gray-200 text-gray-800 px-4 rounded-lg font-bold border-2 border-gray-300 whitespace-nowrap text-lg">选单位</button>
+<button type="button" id="btn-pick-unit-edit" class="bg-gray-200 text-gray-800 px-4 rounded-lg font-bold border-2 border-gray-300 whitespace-nowrap text-lg">选单位</button>
                     </div>
                 </div>
+
+                <div class="mt-2 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" id="edit-enable-subunit" class="w-6 h-6 text-blue-600 rounded">
+                        <span class="font-bold text-lg text-gray-800">启用多级单位</span>
+                    </label>
+                    <div id="edit-subunit-area" class="hidden flex flex-col gap-4 mt-4 pl-2 border-l-4 border-indigo-200">
+                        <div>
+                            <label for="edit-sub-name" class="block font-bold mb-1 text-lg">大单位名称</label>
+                            <input type="text" id="edit-sub-name" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg" aria-label="大单位名称">
+                        </div>
+                        <div>
+                            <label for="edit-sub-capacity" class="block font-bold mb-1 text-lg">包含数量</label>
+                            <input type="number" id="edit-sub-capacity" class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg" aria-label="换算数量">
+                        </div>
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-1 gap-6">
                     <div>
                         <label for="edit-room" class="block font-bold mb-2 text-xl">房间</label>
@@ -389,7 +425,12 @@
 
     <div id="modal-qty" class="hidden fixed inset-0 bg-black bg-opacity-80 z-50 flex justify-center items-end sm:items-center">
         <div class="bg-white w-full max-w-md p-6 rounded-t-2xl sm:rounded-2xl shadow-2xl border-t-4 border-blue-500" role="dialog" aria-modal="true" aria-labelledby="qty-title">
-            <h2 id="qty-title" class="text-2xl font-bold mb-6 text-center text-gray-900 outline-none" tabindex="-1">选择数量</h2>
+<h2 id="qty-title" class="text-2xl font-bold mb-4 text-center text-gray-900 outline-none" tabindex="-1">选择数量</h2>
+            
+            <div id="qty-unit-toggle" class="hidden flex justify-center gap-4 mb-4" role="radiogroup" aria-label="选择操作单位">
+                <button id="btn-qty-unit-small" class="px-4 py-2 bg-blue-600 text-white font-bold rounded-lg border-2 border-blue-600 shadow-sm text-lg" aria-checked="true" role="radio">个</button>
+                <button id="btn-qty-unit-big" class="px-4 py-2 bg-white text-gray-700 font-bold rounded-lg border-2 border-gray-300 shadow-sm text-lg" aria-checked="false" role="radio">箱</button>
+            </div>
             <div class="grid grid-cols-5 gap-3 mb-6" id="qty-grid"></div>
             <div class="flex gap-2 mb-6 items-stretch">
                 <div id="qty-custom-trigger" class="custom-input-trigger" role="button" tabindex="0" aria-label="自定义数量">

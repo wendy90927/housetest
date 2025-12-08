@@ -1,4 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+	import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged, deleteUser, setPersistence, browserLocalPersistence, browserSessionPersistence, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, getDocs, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch, increment, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
@@ -353,10 +353,24 @@ const nickName = user.displayName || '未设置昵称';
                         item.tags.map(t => `<span class="px-2 py-0.5 bg-blue-100 text-blue-800 text-sm font-bold rounded-full border border-blue-200">${t}</span>`).join('') +
                         `</div>`;
                 }
-                const tagsText = item.tags && item.tags.length > 0 ? `，标签：${item.tags.join('、')}` : '';
+const tagsText = item.tags && item.tags.length > 0 ? `，标签：${item.tags.join('、')}` : '';
 
-                const labelText = `${item.name}，分类：${item.category}，位于${item.room} ${item.location||''}，数量${item.quantity}${item.unit||'个'}${tagsText}`;
+                // 多级单位显示逻辑
+                let qtyDisplay = `${item.quantity} <span class="text-lg text-gray-500">${item.unit||'个'}</span>`;
+                let ariaQty = `${item.quantity}${item.unit||'个'}`;
                 
+                if (item.subUnit && item.subCapacity > 1) {
+                    const bigQty = Math.floor(item.quantity / item.subCapacity);
+                    const smallQty = item.quantity % item.subCapacity;
+                    const subInfo = `${bigQty}${item.subUnit}` + (smallQty > 0 ? ` ${smallQty}${item.unit}` : '');
+                    
+                    if (bigQty > 0) {
+                        qtyDisplay = `${subInfo} <span class="text-sm text-gray-400 block font-normal">(${item.quantity} ${item.unit})</span>`;
+                        ariaQty = subInfo; // 读屏优先读大单位
+                    }
+                }
+
+                const labelText = `${item.name}，分类：${item.category}，位于${item.room} ${item.location||''}，数量${ariaQty}${tagsText}`;
                 const htmlContent = `
                     <div class="flex flex-col gap-1 pointer-events-none">
                         <div class="flex justify-between items-start">
@@ -365,9 +379,11 @@ const nickName = user.displayName || '未设置昵称';
                                     ${item.name}
                                     <span class="text-sm font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded border border-gray-300">${item.category}</span>
                                 </h3>
-                                <p class="text-base text-gray-600 font-bold item-loc mt-1">${item.room} - ${item.location || '位置未填'}</p>
+<p class="text-base text-gray-600 font-bold item-loc mt-1">${item.room} - ${item.location || '位置未填'}</p>
                             </div>
-                            <div class="text-3xl font-bold text-blue-700 item-qty whitespace-nowrap">${item.quantity} <span class="text-lg text-gray-500">${item.unit||'个'}</span></div>
+                            <div class="text-right">
+                                <div class="text-2xl font-bold text-blue-700 item-qty">${qtyDisplay}</div>
+                            </div>
                         </div>
                         ${tagsHtml}
                     </div>
@@ -499,6 +515,18 @@ const delBtn = bubble.querySelector('.tag-remove');
         setupTagInput('add-tags-input', 'btn-add-tag-trigger', 'add-tags-container');
         setupTagInput('edit-tags-input', 'btn-edit-tag-trigger', 'edit-tags-container');
 
+// --- Sub-unit Form Logic ---
+        function setupSubUnitToggle(chkId, areaId) {
+            const chk = document.getElementById(chkId);
+            const area = document.getElementById(areaId);
+            chk.addEventListener('change', () => {
+                if(chk.checked) { area.classList.remove('hidden'); playSound('click'); }
+                else { area.classList.add('hidden'); }
+            });
+        }
+        setupSubUnitToggle('add-enable-subunit', 'add-subunit-area');
+        setupSubUnitToggle('edit-enable-subunit', 'edit-subunit-area');
+
         // --- Auto Inference ---
         function attemptInference(name) {
             if(!name) return;
@@ -573,12 +601,15 @@ if (predictedCat) {
                     unit: document.getElementById('add-unit').value,
                     room: document.getElementById('add-room').value,
                     location: document.getElementById('add-location').value,
-                    quantity: pendingAddQty,
+quantity: pendingAddQty,
+                    subUnit: document.getElementById('add-enable-subunit').checked ? document.getElementById('add-sub-name').value : null,
+                    subCapacity: document.getElementById('add-enable-subunit').checked ? parseInt(document.getElementById('add-sub-capacity').value) : null,
                     uid: auth.currentUser.uid,
                     updatedAt: serverTimestamp()
                 });
                 announce("添加成功");
                 document.getElementById('form-add').reset();
+document.getElementById('add-subunit-area').classList.add('hidden'); // 强制折叠子单位区域
                 pendingAddQty = 1;
                 pendingTags = [];
                 renderTags('add-tags-container', 'add-tags-input');
@@ -691,7 +722,9 @@ document.getElementById('btn-pick-unit-add').addEventListener('click', () => ope
                     tags: pendingTags, 
                     room: document.getElementById('edit-room').value,
                     location: document.getElementById('edit-location').value,
-                    unit: document.getElementById('edit-unit').value,
+unit: document.getElementById('edit-unit').value,
+                    subUnit: document.getElementById('edit-enable-subunit').checked ? document.getElementById('edit-sub-name').value : null,
+                    subCapacity: document.getElementById('edit-enable-subunit').checked ? parseInt(document.getElementById('edit-sub-capacity').value) : null,
                     quantity: newQty,
                     updatedAt: serverTimestamp()
                 });
@@ -724,7 +757,8 @@ document.getElementById('btn-pick-unit-add').addEventListener('click', () => ope
             const btn = e.target.closest('button'); if (!btn) return;
             const act = btn.dataset.action;
             if (act === 'put') openQtyPicker("放入数量", (n) => handleUpdate(n));
-            if (act === 'take') openQtyPicker("取出数量", (n) => handleUpdate(-n));
+if (act === 'put') openQtyPicker("放入数量", (n) => handleUpdate(n), currentActionItem);
+            if (act === 'take') openQtyPicker("取出数量", (n) => handleUpdate(-n), currentActionItem);
             if (act === 'delete') openGenericConfirm(`确定删除 ${currentActionItem.name} 吗？`, execDelete);
             if (act === 'edit') openEditScreen(currentActionItem);
         });
@@ -740,18 +774,31 @@ document.getElementById('btn-pick-unit-add').addEventListener('click', () => ope
             document.getElementById('edit-room').value = item.room;
             document.getElementById('edit-location').value = item.location;
             document.getElementById('edit-unit').value = item.unit || '个';
-            document.getElementById('edit-quantity').value = item.quantity;
+
+// 回显子单位
+            if (item.subUnit && item.subCapacity) {
+                document.getElementById('edit-enable-subunit').checked = true;
+                document.getElementById('edit-subunit-area').classList.remove('hidden');
+                document.getElementById('edit-sub-name').value = item.subUnit;
+                document.getElementById('edit-sub-capacity').value = item.subCapacity;
+            } else {
+                document.getElementById('edit-enable-subunit').checked = false;
+                document.getElementById('edit-subunit-area').classList.add('hidden');
+                document.getElementById('edit-sub-name').value = '';
+                document.getElementById('edit-sub-capacity').value = '';
+            }
+
             pendingTags = [...(item.tags || [])];
             renderTags('edit-tags-container', 'edit-tags-input');
         }
 
 // Qty Picker (Fixed Focus Logic)
         let qtyCallback = null;
+        let currentPickerScale = 1; // 1 = 小单位, N = 大单位
         const qtyGrid = document.getElementById('qty-grid');
         const qtyBtns = [];
 
         // 绑定取消按钮 (修复点击无效问题)
-        // 注意：closeQtyModal 是函数声明，会被提升，因此可以直接调用
         document.getElementById('btn-qty-cancel').addEventListener('click', closeQtyModal);
         
         qtyGrid.innerHTML = '';
@@ -759,17 +806,14 @@ document.getElementById('btn-pick-unit-add').addEventListener('click', () => ope
             const btn = document.createElement('button'); 
             btn.className = 'grid-btn'; 
             btn.textContent = i;
-            // 核心交互：仅数字1可被Tab聚焦
             btn.tabIndex = (i === 1) ? 0 : -1; 
 
-            // 键盘导航：上下左右
             btn.addEventListener('keydown', (e) => {
                 if (['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
                     e.preventDefault();
                     const idx = qtyBtns.indexOf(e.target);
                     let next = idx;
                     const total = 10;
-                    
                     if (e.key === 'ArrowRight') next = (idx + 1) % total;
                     if (e.key === 'ArrowLeft') next = (idx - 1 + total) % total;
                     if (e.key === 'ArrowDown') { if (idx + 5 < total) next = idx + 5; }
@@ -787,18 +831,48 @@ document.getElementById('btn-pick-unit-add').addEventListener('click', () => ope
                 submitQty(i); 
             };
             btn.addEventListener('click', handler); 
-            // 允许 Space/Enter 触发
-            btn.addEventListener('keydown', (e) => {
-                if(e.key === 'Enter') handler(e);
-            });
-            
+            btn.addEventListener('keydown', (e) => { if(e.key === 'Enter') handler(e); });
             qtyBtns.push(btn);
             qtyGrid.appendChild(btn);
         }
-        function openQtyPicker(title, cb) {
+
+        function openQtyPicker(title, cb, itemContext = null) {
             playSound('click'); qtyCallback = cb;
             document.getElementById('qty-title').textContent = title;
             document.getElementById('modal-action').classList.add('hidden'); document.getElementById('modal-qty').classList.remove('hidden');
+            
+            // 多级单位切换逻辑
+            const toggleDiv = document.getElementById('qty-unit-toggle');
+            const btnSmall = document.getElementById('btn-qty-unit-small');
+            const btnBig = document.getElementById('btn-qty-unit-big');
+            currentPickerScale = 1; // 重置为默认
+
+            if (itemContext && itemContext.subUnit && itemContext.subCapacity > 1) {
+                toggleDiv.classList.remove('hidden');
+                btnSmall.textContent = itemContext.unit || '个';
+                btnBig.textContent = itemContext.subUnit;
+                
+                // 样式重置
+                const setStyle = (isBig) => {
+                    const activeClass = ['bg-blue-600', 'text-white', 'border-blue-600'];
+                    const inactiveClass = ['bg-white', 'text-gray-700', 'border-gray-300'];
+                    if (isBig) {
+                        btnBig.classList.add(...activeClass); btnBig.classList.remove(...inactiveClass); btnBig.setAttribute('aria-checked', 'true');
+                        btnSmall.classList.add(...inactiveClass); btnSmall.classList.remove(...activeClass); btnSmall.setAttribute('aria-checked', 'false');
+                    } else {
+                        btnSmall.classList.add(...activeClass); btnSmall.classList.remove(...inactiveClass); btnSmall.setAttribute('aria-checked', 'true');
+                        btnBig.classList.add(...inactiveClass); btnBig.classList.remove(...activeClass); btnBig.setAttribute('aria-checked', 'false');
+                    }
+                };
+                setStyle(false); // 默认选中该小单位
+
+                btnSmall.onclick = () => { currentPickerScale = 1; setStyle(false); announce(`已切换为按${itemContext.unit}操作`); };
+                btnBig.onclick = () => { currentPickerScale = parseInt(itemContext.subCapacity); setStyle(true); announce(`已切换为按${itemContext.subUnit}操作`); };
+
+            } else {
+                toggleDiv.classList.add('hidden');
+            }
+
             const input = document.getElementById('qty-custom-input'); const confirm = document.getElementById('btn-qty-confirm'); const trigger = document.getElementById('qty-custom-trigger');
             input.value = ''; input.disabled = true; confirm.disabled = true; confirm.classList.add('opacity-50'); confirm.setAttribute('tabindex', '-1'); trigger.setAttribute('tabindex', '0');
             setTimeout(() => { qtyGrid.firstChild.focus(); announce("请选择数量"); }, 100);
@@ -813,8 +887,9 @@ document.getElementById('btn-pick-unit-add').addEventListener('click', () => ope
         document.getElementById('qty-custom-input').addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.keyCode === 13) { e.preventDefault(); e.stopPropagation(); submitQty(parseInt(e.target.value)); } });
         document.getElementById('btn-qty-confirm').addEventListener('click', () => { submitQty(parseInt(document.getElementById('qty-custom-input').value)); });
         
-        function submitQty(val) { 
-            if (!val || val <= 0) { announce("无效数量"); return; } 
+function submitQty(rawVal) { 
+            const val = rawVal * currentPickerScale; // 核心：乘以倍率
+            if (!val || val <= 0) { announce("无效数量"); return; }
             if (qtyCallback) qtyCallback(val); 
             document.getElementById('modal-qty').classList.add('hidden');
             
