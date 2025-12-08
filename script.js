@@ -472,9 +472,12 @@ const nickName = user.displayName || '未设置昵称';
                 const bubble = document.createElement('span');
                 bubble.className = 'tag-bubble';
                 bubble.innerHTML = `${tag} <span class="tag-remove" role="button" tabindex="0" aria-label="删除标签 ${tag}">×</span>`;
-                const delBtn = bubble.querySelector('.tag-remove');
+const delBtn = bubble.querySelector('.tag-remove');
                 const delHandler = (e) => { 
                     e.stopPropagation(); 
+                    // 修复：阻止回车键触发默认表单提交
+                    if (e.key === 'Enter') e.preventDefault();
+                    
                     if(e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
                     removeTag(tag, containerId, inputId); 
                 };
@@ -515,15 +518,11 @@ const nickName = user.displayName || '未设置昵称';
                     if (name.includes(key)) { tags.forEach(t => { if(!predictedTags.includes(t)) predictedTags.push(t); }); }
                 }
             }
-            if (predictedCat) {
+if (predictedCat) {
                 document.getElementById('add-category').value = predictedCat;
                 announce(`已自动选择分类：${predictedCat}`);
             }
-            if (predictedTags.length > 0) {
-                pendingTags = [...new Set([...pendingTags, ...predictedTags])];
-                renderTags('add-tags-container', 'add-tags-input');
-                announce(`已自动填入 ${predictedTags.length} 个标签`);
-            }
+            // 已移除自动填入标签逻辑，防止误导
             if (predictedUnit && !document.getElementById('add-unit').value) {
                 document.getElementById('add-unit').value = predictedUnit;
             }
