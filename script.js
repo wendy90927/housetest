@@ -478,16 +478,14 @@ let tagsHtml = '';
             container.innerHTML = '';
             pendingTags.forEach(tag => {
                 const bubble = document.createElement('span');
-bubble.className = 'tag-bubble';
+                bubble.className = 'tag-bubble';
                 bubble.innerHTML = `${tag} <span class="tag-remove" role="button" tabindex="0" aria-label="删除标签 ${tag}">×</span>`;
                 const delBtn = bubble.querySelector('.tag-remove');
 const delHandler = (e) => { 
-                    // 修复：仅在点击或按下Enter/Space时阻止默认行为，允许Tab键通行
-                    if (e.type === 'click' || e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault(); 
-                        e.stopPropagation();
-                        removeTag(tag, containerId, inputId); 
-                    }
+                    e.preventDefault(); // 阻止表单提交
+                    e.stopPropagation();
+                    if(e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+                    removeTag(tag, containerId, inputId); 
                 };
                 delBtn.addEventListener('click', delHandler);
                 delBtn.addEventListener('keydown', delHandler);
@@ -559,7 +557,6 @@ document.getElementById('btn-nav-add').addEventListener('click', () => {
             renderTags('add-tags-container', 'add-tags-input');
         });
         document.getElementById('btn-back-add').addEventListener('click', () => switchScreen('screen-home'));
-document.getElementById('btn-cancel-add').addEventListener('click', () => switchScreen('screen-home'));
         document.getElementById('btn-nav-data').addEventListener('click', () => switchScreen('screen-data'));
         document.getElementById('btn-back-data').addEventListener('click', () => switchScreen('screen-home'));
 
@@ -567,39 +564,13 @@ document.getElementById('btn-cancel-add').addEventListener('click', () => switch
         function openUnitPicker(targetId) {
             const grid = document.getElementById('unit-grid');
             grid.innerHTML = '';
-UNIT_LIST.forEach((u, index) => {
+            UNIT_LIST.forEach(u => {
                 const btn = document.createElement('button');
                 btn.className = "grid-btn";
                 btn.textContent = u;
-btn.tabIndex = index === 0 ? 0 : -1;
-                // Roving Tabindex: 仅第一个元素可聚焦，其余为 -1
-btn.onclick = () => {
+                btn.onclick = () => {
                     document.getElementById(targetId).value = u;
                     closeUnitModal();
-                };
-
-                // 键盘方向键导航逻辑
-                btn.onkeydown = (e) => {
-                    const colCount = 5; // 对应 CSS grid-cols-5
-                    let nextIndex = null;
-
-                    if (e.key === 'ArrowRight') nextIndex = index + 1;
-                    else if (e.key === 'ArrowLeft') nextIndex = index - 1;
-                    else if (e.key === 'ArrowDown') nextIndex = index + colCount;
-                    else if (e.key === 'ArrowUp') nextIndex = index - colCount;
-                    
-                    if (nextIndex !== null) {
-                        e.preventDefault();
-                        // 边界检查
-                        if (nextIndex >= 0 && nextIndex < UNIT_LIST.length) {
-                            const allBtns = grid.querySelectorAll('button');
-                            if (allBtns[nextIndex]) {
-                                btn.tabIndex = -1;
-                                allBtns[nextIndex].tabIndex = 0;
-                                allBtns[nextIndex].focus();
-                            }
-                        }
-                    }
                 };
                 grid.appendChild(btn);
             });
@@ -821,34 +792,14 @@ window.openActionMenu = openActionMenu;
             // 渲染快捷按钮 (仅针对主数量)
             const grid = document.getElementById('qty-grid');
             grid.innerHTML = '';
-const qtyOptions = [1, 2, 3, 4, 5];
-            qtyOptions.forEach((n, index) => {
+            [1, 2, 3, 4, 5].forEach(n => {
                 const btn = document.createElement('button');
                 btn.className = "grid-btn";
                 btn.textContent = n;
-btn.tabIndex = index === 0 ? 0 : -1;
-btn.onclick = () => submitQty(n, 0); 
-                
-                btn.onkeydown = (e) => {
-                    let nextIndex = null;
-                    if (e.key === 'ArrowRight') nextIndex = index + 1;
-                    else if (e.key === 'ArrowLeft') nextIndex = index - 1;
-                    // 单行 Grid，上下键暂不处理或视为左右
-                    
-                    if (nextIndex !== null) {
-                        e.preventDefault();
-                        if (nextIndex >= 0 && nextIndex < qtyOptions.length) {
-                            const allBtns = grid.querySelectorAll('button');
-                            if (allBtns[nextIndex]) {
-                                btn.tabIndex = -1;
-                                allBtns[nextIndex].tabIndex = 0;
-                                allBtns[nextIndex].focus();
-                            }
-                        }
-                    }
-                };
+                btn.onclick = () => submitQty(n, 0); // 快捷键只改变主数量
                 grid.appendChild(btn);
             });
+            
             // 聚焦
             setTimeout(() => { 
                 if(grid.firstChild) grid.firstChild.focus(); 
