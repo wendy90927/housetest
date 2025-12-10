@@ -640,94 +640,428 @@ document.getElementById('btn-back-data').addEventListener('click', () => {
                     subUnit: isSubEnabled ? document.getElementById('add-sub-name').value : null,
                     subCapacity: isSubEnabled ? capacity : null,
                     uid: auth.currentUser.uid,
-updatedAt: serverTimestamp()
+                    updatedAt: serverTimestamp()
                 });
-                announce(`已添加 ${name}`);
+                announce("添加成功");
                 document.getElementById('form-add').reset();
-                document.getElementById('add-name').focus();
-                document.getElementById('add-quantity').value = 1;
-                document.getElementById('add-unit').value = '个';
-                // 重置暂存标签
+                document.getElementById('add-subunit-area').classList.add('hidden'); 
                 pendingTags = [];
                 renderTags('add-tags-container', 'add-tags-input');
-                // 重置拆零显隐
-                document.getElementById('add-subunit-area').classList.add('hidden');
-            } catch (err) {
-                console.error(err);
+
+// 重置默认值
+                document.getElementById('add-quantity').value = "1";
+                document.getElementById('add-unit').value = "个";
+                document.getElementById('add-name').focus();
+            } catch(err) {
                 announce("添加失败");
+                console.error(err);
+                document.getElementById('add-name').focus();
+            }
+        });
+        document.getElementById('btn-cancel-add').addEventListener('click', () => {
+            switchScreen('screen-home');
+            announce("已取消");
+        });
+
+        function cancelEdit() {
+            playSound('click');
+            if(currentActionItem) focusTargetId = currentActionItem.id;
+            switchScreen('screen-' + previousScreen);
+        }
+        document.getElementById('btn-back-edit').addEventListener('click', cancelEdit);
+        document.getElementById('btn-cancel-edit-form').addEventListener('click', cancelEdit);
+
+// Unit Picker
+        let unitTargetInput = null;
+        let unitTriggerBtnId = null; 
+        const unitGrid = document.getElementById('unit-grid');
+        
+        function initUnitGrid() {
+            unitGrid.innerHTML = '';
+            const allBtns = [];
+            
+            // 强制绑定取消按钮 (修复点击无响应问题)
+            const btnCancel = document.getElementById('btn-unit-cancel');
+            btnCancel.onclick = () => window.closeUnitModal();
+
+            UNIT_LIST.forEach((u, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'grid-btn'; 
+                btn.textContent = u;
+                // 核心交互：仅第一个元素可被Tab聚焦，其余为-1 (游走焦点)
+                btn.tabIndex = (index === 0) ? 0 : -1;
+
+                // 键盘导航：上下左右键
+                btn.addEventListener('keydown', (e) => {
+                    if (['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
+                        e.preventDefault();
+                        const idx = allBtns.indexOf(e.target);
+                        let next = idx;
+                        const total = allBtns.length;
+                        // 网格布局：每行5个
+                        if (e.key === 'ArrowRight') next = (idx + 1) % total;
+                        if (e.key === 'ArrowLeft') next = (idx - 1 + total) % total;
+                        if (e.key === 'ArrowDown') { if(idx + 5 < total) next = idx + 5; }
+                        if (e.key === 'ArrowUp') { if(idx - 5 >= 0) next = idx - 5; }
+
+                        // 转移焦点
+                        allBtns[idx].tabIndex = -1;
+                        allBtns[next].tabIndex = 0;
+                        allBtns[next].focus();
+                    }
+                });
+
+                btn.addEventListener('click', () => {
+                    if(unitTargetInput) { unitTargetInput.value = u; announce(`已选择 ${u}`); unitTargetInput.focus(); }
+                    closeUnitModal();
+                });
+                
+                allBtns.push(btn);
+                unitGrid.appendChild(btn);
+            });
+        }
+        window.openUnitPicker = (inputId, triggerBtnId) => {
+            playSound('click'); 
+            unitTargetInput = document.getElementById(inputId); 
+            unitTriggerBtnId = triggerBtnId; // 记录触发按钮ID
+            initUnitGrid(); 
+            document.getElementById('modal-unit').classList.remove('hidden'); 
+            document.getElementById('unit-title').focus();
+        };
+
+        // 修改：关闭时将焦点还给触发按钮
+        window.closeUnitModal = () => { 
+            document.getElementById('modal-unit').classList.add('hidden'); 
+            if(unitTriggerBtnId) {
+                const btn = document.getElementById(unitTriggerBtnId);
+                if(btn) btn.focus();
+            }
+        };
+document.getElementById('btn-pick-unit-add').addEventListener('click', () => openUnitPicker('add-unit', 'btn-pick-unit-add'));
+document.getElementById('btn-pick-unit-add-sub').addEventListener('click', () => openUnitPicker('add-sub-name', 'btn-pick-unit-add-sub'));
+        document.getElementById('btn-pick-unit-edit').addEventListener('click', () => openUnitPicker('edit-unit', 'btn-pick-unit-edit'));
+document.getElementById('btn-pick-unit-edit-sub').addEventListener('click', () => openUnitPicker('edit-sub-name', 'btn-pick-unit-edit-sub'));
+
+// Edit Execution
+        document.getElementById('form-edit').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // --- 修复: 编辑保存时的计算 ---
+            // 获取用户输入的主数量 (如: 2箱)
+            const inputMainQty = parseFloat(document.getElementById('edit-quantity').value) || 0;
+            
+            // 获取当前的换算比例
+            const isSub = document.getElementById('edit-enable-subunit').checked;
+            const cap = isSub ? (parseFloat(document.getElementById('edit-sub-capacity').value) || 1) : 1;
+            
+            // 计算入库总数 (如: 2 * 24 = 48)
+            const finalTotal = inputMainQty * cap;
+
+            const unitVal = document.getElementById('edit-unit').value;
+            learnNewUnit(unitVal);
+            
+if (finalTotal === 0) { openZeroConfirmEdit(finalTotal); return; }
+            await executeEdit(finalTotal);
+        });
+
+        async function executeEdit(newQty) {
+            focusTargetId = currentActionItem.id; 
+            try {
+                await updateDoc(doc(db, "items", currentActionItem.id), {
+                    name: document.getElementById('edit-name').value,
+                    category: document.getElementById('edit-category').value, 
+                    tags: pendingTags, 
+                    room: document.getElementById('edit-room').value,
+                    location: document.getElementById('edit-location').value,
+unit: document.getElementById('edit-unit').value,
+                    subUnit: document.getElementById('edit-enable-subunit').checked ? document.getElementById('edit-sub-name').value : null,
+                    subCapacity: document.getElementById('edit-enable-subunit').checked ? parseInt(document.getElementById('edit-sub-capacity').value) : null,
+                    quantity: newQty,
+                    updatedAt: serverTimestamp()
+                });
+                announce("修改成功");
+                switchScreen('screen-' + previousScreen);
+            } catch(e) { announce("失败"); }
+        }
+
+        function openZeroConfirmEdit(newQty) {
+            const m = document.getElementById('modal-zero'); playSound('error'); m.classList.remove('hidden'); setTimeout(() => document.getElementById('title-zero').focus(), 100);
+            document.getElementById('btn-zero-keep').onclick = async () => { m.classList.add('hidden'); await executeEdit(0); };
+            document.getElementById('btn-zero-del').onclick = async () => { m.classList.add('hidden'); await execDelete(); switchScreen('screen-' + previousScreen); };
+            document.getElementById('btn-zero-cancel').onclick = () => { m.classList.add('hidden'); announce("已取消"); };
+        }
+
+        // Action Menu
+        function openActionMenu(item) {
+            playSound('click');
+            const freshItem = allItems.find(i => i.id === item.id) || item;
+            currentActionItem = freshItem;
+            const modal = document.getElementById('modal-action');
+            document.getElementById('action-title').textContent = `管理：${freshItem.name}`;
+            document.getElementById('action-desc').textContent = `分类：${freshItem.category} | 剩余：${freshItem.quantity} ${freshItem.unit||'个'}`;
+            const btnPut = document.getElementById('btn-act-put');
+            if (currentScreen === 'takeout') btnPut.classList.add('hidden'); else btnPut.classList.remove('hidden'); 
+            modal.classList.remove('hidden');
+            setTimeout(() => { const v = modal.querySelectorAll('button:not(.hidden)'); if(v.length > 0) v[0].focus(); }, 100);
+        }
+document.getElementById('action-buttons-container').addEventListener('click', (e) => {
+            const btn = e.target.closest('button'); if (!btn) return;
+            const act = btn.dataset.action;
+            
+            if (act === 'put') openQtyPicker("放入数量", (n) => handleUpdate(n), currentActionItem);
+            if (act === 'take') openQtyPicker("取出数量", (n) => handleUpdate(-n), currentActionItem);
+            if (act === 'delete') openGenericConfirm(`确定删除 ${currentActionItem.name} 吗？`, execDelete);
+            if (act === 'edit') openEditScreen(currentActionItem);
+        });
+
+        function openEditScreen(item) {
+            document.getElementById('modal-action').classList.add('hidden');
+            switchScreen('screen-edit');
+            document.getElementById('edit-name').value = item.name;
+            const catSelect = document.getElementById('edit-category');
+            catSelect.value = item.category || '其他杂项';
+            if(catSelect.value === '') catSelect.value = '其他杂项';
+
+            document.getElementById('edit-room').value = item.room;
+            document.getElementById('edit-location').value = item.location;
+            document.getElementById('edit-unit').value = item.unit || '个';
+
+// 回显子单位
+            if (item.subUnit && item.subCapacity) {
+                document.getElementById('edit-enable-subunit').checked = true;
+                document.getElementById('edit-subunit-area').classList.remove('hidden');
+                document.getElementById('edit-sub-name').value = item.subUnit;
+                document.getElementById('edit-sub-capacity').value = item.subCapacity;
+            } else {
+                document.getElementById('edit-enable-subunit').checked = false;
+                document.getElementById('edit-subunit-area').classList.add('hidden');
+                document.getElementById('edit-sub-name').value = '';
+                document.getElementById('edit-sub-capacity').value = '';
+            }
+
+pendingTags = [...(item.tags || [])];
+            
+            // --- 修复: 数量回显 (转回主单位) ---
+            // 如果有多级单位，显示“主单位数量”(例如 24瓶 -> 显示 1箱)
+            const cap = (item.subUnit && item.subCapacity) ? item.subCapacity : 1;
+            // 保留2位小数，防止除不尽
+            const mainQty = (item.quantity / cap); 
+            // 如果是整数就显示整数，否则显示小数
+            document.getElementById('edit-quantity').value = Number.isInteger(mainQty) ? mainQty : mainQty.toFixed(2);
+
+            renderTags('edit-tags-container', 'edit-tags-input');
+        }
+
+// --- 核心重构: 数量选择器 (原生输入框版) ---
+        let qtyCallback = null;
+        let currentPickerScale = 1; // 1 = 按小单位, N = 按大单位
+        let currentItemContext = null; // 保存当前操作的物品上下文
+
+        // 绑定输入框回车提交
+        document.getElementById('qty-custom-input').addEventListener('keydown', (e) => {
+            if(e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('btn-qty-confirm').click();
             }
         });
 
-        // --- Data Management ---
-        document.getElementById('btn-export').addEventListener('click', () => {
-            // 新标准顺序：名称, 大类, 标签, 主单位, 主数量, 子单位, 换算比例, 房间, 具体位置
-            let csvContent = "\uFEFF物品名称,大类,标签,主单位,主数量,子单位,换算比例,房间,具体位置\n"; 
+        // 绑定取消
+        document.getElementById('btn-qty-cancel').addEventListener('click', closeQtyModal);
+        
+        // 绑定确认
+        document.getElementById('btn-qty-confirm').addEventListener('click', () => {
+             const val = parseFloat(document.getElementById('qty-custom-input').value);
+             if (isNaN(val) || val <= 0) {
+                 announce("请输入有效的数字");
+                 document.getElementById('qty-custom-input').focus();
+                 return;
+             }
+             submitQty(val);
+        });
+
+        function openQtyPicker(title, cb, itemContext = null) {
+            playSound('click'); 
+            qtyCallback = cb;
+            currentItemContext = itemContext;
+            
+            document.getElementById('qty-title').textContent = title;
+            document.getElementById('modal-action').classList.add('hidden'); 
+            document.getElementById('modal-qty').classList.remove('hidden');
+            
+            const toggleDiv = document.getElementById('qty-unit-toggle');
+            const btnSmall = document.getElementById('btn-qty-unit-small');
+            const btnBig = document.getElementById('btn-qty-unit-big');
+            const input = document.getElementById('qty-custom-input');
+            const helper = document.getElementById('qty-helper-text');
+            
+            input.value = ''; // 清空旧值
+            
+            // 判断是否有多级单位
+            if (itemContext && itemContext.subUnit && itemContext.subCapacity > 1) {
+                toggleDiv.classList.remove('hidden');
+                
+                // 设置按钮文字
+                btnSmall.textContent = `按小单位 (${itemContext.subUnit})`;
+                btnBig.textContent = `按大单位 (${itemContext.unit})`;
+
+                // 样式切换函数
+                const setStyle = (mode) => {
+                    // mode: 'small' or 'big'
+                    const activeClass = ['bg-blue-600', 'text-white', 'border-blue-600'];
+                    const inactiveClass = ['bg-white', 'text-gray-700', 'border-gray-300'];
+                    
+                    if (mode === 'big') {
+                        currentPickerScale = parseFloat(itemContext.subCapacity);
+                        btnBig.classList.add(...activeClass); btnBig.classList.remove(...inactiveClass); btnBig.setAttribute('aria-checked', 'true');
+                        btnSmall.classList.add(...inactiveClass); btnSmall.classList.remove(...activeClass); btnSmall.setAttribute('aria-checked', 'false');
+                        helper.textContent = `当前输入 1 代表 1 ${itemContext.unit} (即 ${currentPickerScale} ${itemContext.subUnit})`;
+                    } else {
+                        currentPickerScale = 1;
+                        btnSmall.classList.add(...activeClass); btnSmall.classList.remove(...inactiveClass); btnSmall.setAttribute('aria-checked', 'true');
+                        btnBig.classList.add(...inactiveClass); btnBig.classList.remove(...activeClass); btnBig.setAttribute('aria-checked', 'false');
+                        helper.textContent = `当前输入 1 代表 1 ${itemContext.subUnit}`;
+                    }
+                };
+
+                // 智能默认选中逻辑：
+                // 如果是“取出”操作 (title包含取出)，默认选小单位
+                // 如果是“放入”操作 (title包含放入)，默认选大单位
+                if (title.includes("取出")) {
+                    setStyle('small');
+                } else {
+                    setStyle('big'); // 放入默认按箱放
+                }
+
+                // 绑定点击事件
+                btnSmall.onclick = () => { setStyle('small'); announce(`已切换为按${itemContext.subUnit}操作`); input.focus(); };
+                btnBig.onclick = () => { setStyle('big'); announce(`已切换为按${itemContext.unit}操作`); input.focus(); };
+
+            } else {
+                // 没有多级单位，隐藏切换器，默认为1
+                toggleDiv.classList.add('hidden');
+                currentPickerScale = 1;
+                const u = itemContext ? (itemContext.unit || '个') : '个';
+                helper.textContent = `请输入数量 (单位：${u})`;
+            }
+
+            // 聚焦输入框
+            setTimeout(() => input.focus(), 100);
+        }
+
+        function submitQty(inputVal) { 
+            // 核心计算：输入值 * 当前倍率
+            // 例如：输入 2 (箱), 倍率 24 -> 结果 48 (瓶)
+            const finalVal = inputVal * currentPickerScale;
+            
+            if (qtyCallback) qtyCallback(finalVal); 
+            
+            document.getElementById('modal-qty').classList.add('hidden');
+            closeModals();
+        }
+        
+function closeQtyModal() { 
+            document.getElementById('modal-qty').classList.add('hidden'); 
+            closeModals(); 
+        }
+
+        window.closeModals = () => {
+            document.querySelectorAll('[id^="modal-"]').forEach(m => m.classList.add('hidden'));
+            const containerId = (currentScreen === 'results') ? 'results-list' : (currentScreen === 'takeout' ? 'takeout-list' : 'home-list');
+            const container = document.getElementById(containerId);
+            if (currentActionItem && currentActionItem.id) {
+                const target = container.querySelector(`.item-card[data-id="${currentActionItem.id}"]`);
+                if (target) { target.focus(); return; }
+            }
+            const first = container.querySelector('.item-card');
+            if (first) first.focus();
+        };
+
+        async function handleUpdate(change) {
+            if (!currentActionItem) return;
+            const newQty = currentActionItem.quantity + change;
+            if (newQty === 0) { openZeroConfirm(); return; }
+            if (newQty < 0) { announce("库存不足"); return; }
+            await execUpdate(change);
+        }
+        async function execUpdate(change) {
+            focusTargetId = currentActionItem.id;
+            try {
+                await updateDoc(doc(db, "items", currentActionItem.id), { quantity: increment(change), updatedAt: serverTimestamp() });
+                announce("更新成功"); closeModals();
+            } catch(e) { announce("失败"); }
+        }
+        function openZeroConfirm() {
+            const m = document.getElementById('modal-zero'); playSound('error'); m.classList.remove('hidden'); setTimeout(() => document.getElementById('title-zero').focus(), 100);
+            document.getElementById('btn-zero-keep').onclick = async () => { m.classList.add('hidden'); await execUpdate(-currentActionItem.quantity); };
+            document.getElementById('btn-zero-del').onclick = async () => { m.classList.add('hidden'); await execDelete(); };
+            document.getElementById('btn-zero-cancel').onclick = () => { m.classList.add('hidden'); announce("已取消"); closeModals(); };
+        }
+        let confirmCallback = null;
+        function openGenericConfirm(msg, cb) {
+            document.getElementById('modal-action').classList.add('hidden'); const m = document.getElementById('modal-confirm'); playSound('error');
+            m.classList.remove('hidden'); document.getElementById('confirm-text').textContent = msg; confirmCallback = cb; setTimeout(() => document.getElementById('title-confirm').focus(), 100);
+        }
+        document.getElementById('btn-confirm-ok').addEventListener('click', () => { if(confirmCallback) confirmCallback(); document.getElementById('modal-confirm').classList.add('hidden'); });
+        document.getElementById('btn-confirm-cancel').addEventListener('click', () => closeModals());
+        async function execDelete() { try { await deleteDoc(doc(db, "items", currentActionItem.id)); announce("已删除"); closeModals(); } catch(e) { announce("删除失败"); } }
+
+        // Export/Import
+document.getElementById('btn-export').addEventListener('click', () => {
+let csvContent = "\uFEFF物品名称(必填),大类,标签(小类),主单位(大单位),主数量,子单位(小单位),换算比例,房间(必填),具体位置\n";
             allItems.forEach(item => { 
                 const tagsStr = (item.tags || []).join(';');
-                // 还原显示数量
+                // 还原显示数量：如果是多级单位，需要除以容量得到主数量，以便重新导入时计算正确
                 let displayQty = item.quantity;
                 if (item.subUnit && item.subCapacity > 1) {
                     displayQty = item.quantity / item.subCapacity;
                 }
-                const safeName = `"${(item.name || '').replace(/"/g, '""')}"`;
-                const safeLoc = `"${(item.location || '').replace(/"/g, '""')}"`;
-                
-                csvContent += `${safeName},${item.category},${tagsStr},${item.unit||'个'},${displayQty},${item.subUnit||''},${item.subCapacity||''},${item.room},${safeLoc}\n`; 
+                csvContent += `${item.name},${item.category},${tagsStr},${item.room},${item.location || ''},${displayQty},${item.unit||'个'},${item.subUnit||''},${item.subCapacity||''}\n`; 
             });
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); 
-            const url = URL.createObjectURL(blob); 
-            const link = document.createElement("a"); 
-            link.setAttribute("href", url); 
-            link.setAttribute("download", `Homi备份_${new Date().toISOString().slice(0,10)}.csv`); 
-            document.body.appendChild(link); link.click(); document.body.removeChild(link); 
-            announce("导出成功");
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `物品备份_${new Date().toISOString().slice(0,10)}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); announce("导出成功");
         });
-
-        document.getElementById('btn-download-template').addEventListener('click', () => {
-            const csvContent = "\uFEFF物品名称(必填),大类,标签(分号隔开),主单位,主数量(数字),子单位(可选),换算比例(可选),房间(必填),具体位置\n大米,食品饮料,粮食;主食,袋,1,,,厨房,米桶\n可乐,食品饮料,囤货,箱,2,瓶,24,阳台,箱子";
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); 
-            const url = URL.createObjectURL(blob); 
-            const link = document.createElement("a"); 
-            link.setAttribute("href", url); 
-            link.setAttribute("download", `Homi导入模板.csv`); 
-            document.body.appendChild(link); link.click(); document.body.removeChild(link); 
-            announce("模板下载成功");
+document.getElementById('btn-download-template').addEventListener('click', () => {
+const csvContent = "\uFEFF物品名称(必填),大类,标签(小类),主单位(大单位),主数量,子单位(小单位),换算比例,房间(必填),具体位置\n大米,食品饮料,粮食;主食,袋,1,,,厨房,米桶\n可乐,食品饮料,囤货,箱,2,瓶,24,阳台,箱子";
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `导入模板.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); announce("模板下载成功");
         });
-
         document.getElementById('btn-trigger-upload').addEventListener('click', () => document.getElementById('file-upload').click());
-
-        document.getElementById('file-upload').addEventListener('change', (e) => {
-            const file = e.target.files[0]; if (!file) return; 
-            const reader = new FileReader();
+document.getElementById('file-upload').addEventListener('change', (e) => {
+            const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
             reader.onload = async (e) => {
                 const text = e.target.result; const rows = text.split('\n'); let count = 0;
                 for (let i = 1; i < rows.length; i++) {
-                    const row = rows[i].trim(); if (!row) continue; 
-                    const cols = row.split(',').map(c => c.replace(/^"|"$/g, '').trim());
-                    if (cols.length < 1) continue; 
+                    const row = rows[i].trim(); if (!row) continue; const cols = row.split(','); if (cols.length < 1) continue; const name = cols[0]?.trim(); if(!name) continue;
                     
-                    const name = cols[0]; if(!name) continue;
-                    const cat = cols[1] || '其他杂项';
-                    const tagStr = cols[2] || '';
+                    const cat = cols[1]?.trim() || '其他杂项';
+                    const tagStr = cols[2]?.trim() || '';
                     const tags = tagStr ? tagStr.split(';').map(t => t.trim()).filter(t=>t) : [];
-                    const unitName = cols[3] || '个';
-                    const mainQty = parseFloat(cols[4]) || 1;
-                    const subUnitName = cols[5] || null;
-                    const subCapacity = parseInt(cols[6]) || null;
-                    const roomName = cols[7] || '客厅';
-                    const locName = cols[8] || '';
 
+                    // 解析数量与多级单位逻辑 (新逻辑)
+                    const mainQty = parseFloat(cols[5]) || 1;
+                    const unitName = cols[6]?.trim() || '个';
+                    const subUnitName = cols[7]?.trim() || null;
+                    const subCapacity = parseInt(cols[8]) || null;
+
+                    // 计算入库总数 (如果有子单位，存最小单位总数)
                     let finalQty = mainQty;
-                    if(subUnitName && subCapacity > 1) { finalQty = mainQty * subCapacity; }
+                    if(subUnitName && subCapacity > 1) {
+                        finalQty = mainQty * subCapacity;
+                    }
 
                     await addDoc(itemsRef, { 
-                        name: name, category: cat, tags: tags, unit: unitName, quantity: finalQty, 
-                        subUnit: subUnitName, subCapacity: subCapacity, room: roomName, location: locName, 
-                        uid: auth.currentUser.uid, updatedAt: serverTimestamp() 
+                        name: name, 
+                        category: cat,
+                        tags: tags,
+                        room: cols[3]?.trim() || '客厅', 
+                        location: cols[4]?.trim() || '', 
+                        quantity: finalQty, 
+                        unit: unitName, 
+                        subUnit: subUnitName,
+                        subCapacity: subCapacity,
+                        uid: auth.currentUser.uid, 
+                        updatedAt: serverTimestamp() 
                     }); count++;
                 } announce(`导入 ${count} 个物品`); switchScreen('screen-home');
-            };
-            reader.readAsText(file);
+            }; reader.readAsText(file);
         });
 
 // --- Settings & Tabs Logic ---
