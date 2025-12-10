@@ -1021,12 +1021,12 @@ function closeQtyModal() {
 
         // Export/Import
 document.getElementById('btn-export').addEventListener('click', () => {
-// CSV 表头增加 "零散子数量" 列
-            let csvContent = "\uFEFF物品名称(必填),大类,标签(小类),主单位(大单位),主数量(整数),零散子数量,子单位(小单位),换算比例,房间(必填),具体位置\n";
+// CSV 表头调整：将 "零散子数量" 移到 "换算比例" 后面
+            let csvContent = "\uFEFF物品名称(必填),大类,标签(小类),主单位(大单位),主数量(整数),子单位(小单位),换算比例,零散子数量,房间(必填),具体位置\n";
             allItems.forEach(item => { 
                 const tagsStr = (item.tags || []).join(';');
                 
-                // 还原显示数量：拆分为 主数量(整数) 和 零散数量
+                // 还原显示数量
                 let mainQtyDisplay = item.quantity;
                 let looseQtyDisplay = '';
                 
@@ -1036,14 +1036,14 @@ document.getElementById('btn-export').addEventListener('click', () => {
                     if (looseQtyDisplay === 0) looseQtyDisplay = ''; 
                 }
 
-                // 修正数据顺序：名称,分类,标签,主单位,主数量,零散数量,子单位,换算,房间,具体位置
-                csvContent += `${item.name},${item.category},${tagsStr},${item.unit||'个'},${mainQtyDisplay},${looseQtyDisplay},${item.subUnit||''},${item.subCapacity||''},${item.room},${item.location || ''}\n`; 
+                // 数据顺序调整：... 主数量, 子单位, 换算, 零散数量, ...
+                csvContent += `${item.name},${item.category},${tagsStr},${item.unit||'个'},${mainQtyDisplay},${item.subUnit||''},${item.subCapacity||''},${looseQtyDisplay},${item.room},${item.location || ''}\n`; 
             });
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `物品备份_${new Date().toISOString().slice(0,10)}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); announce("导出成功");
         });
 document.getElementById('btn-download-template').addEventListener('click', () => {
-// 模板更新：增加零散子数量列
-            const csvContent = "\uFEFF物品名称(必填),大类,标签(小类),主单位(大单位),主数量(整数),零散子数量,子单位(小单位),换算比例,房间(必填),具体位置\n大米,食品饮料,粮食;主食,袋,1,,,,厨房,米桶\n可乐,食品饮料,囤货,箱,1,3,瓶,24,阳台,箱子";
+// 模板更新：调整列顺序 (零散子数量后置)
+            const csvContent = "\uFEFF物品名称(必填),大类,标签(小类),主单位(大单位),主数量(整数),子单位(小单位),换算比例,零散子数量,房间(必填),具体位置\n大米,食品饮料,粮食;主食,袋,1,,,,厨房,米桶\n可乐,食品饮料,囤货,箱,1,瓶,24,3,阳台,箱子";
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `导入模板.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); announce("模板下载成功");
         });
         document.getElementById('btn-trigger-upload').addEventListener('click', () => document.getElementById('file-upload').click());
@@ -1058,13 +1058,13 @@ document.getElementById('file-upload').addEventListener('change', (e) => {
                     const tagStr = cols[2]?.trim() || '';
                     const tags = tagStr ? tagStr.split(';').map(t => t.trim()).filter(t=>t) : [];
 
-// 解析数量与多级单位逻辑 (修正后 - 适配新模板)
-                    // 对应新表头：Name(0), Cat(1), Tags(2), Unit(3), MainQty(4), LooseQty(5), SubUnit(6), Scale(7), Room(8), Loc(9)
+// 解析数量与多级单位逻辑 (修正后 - 适配列顺序调整)
+                    // 新顺序：Name(0), Cat(1), Tags(2), Unit(3), MainQty(4), SubUnit(5), Scale(6), LooseQty(7), Room(8), Loc(9)
                     const unitName = cols[3]?.trim() || '个';
                     const mainQty = parseFloat(cols[4]) || 0; 
-                    const looseQty = parseFloat(cols[5]) || 0; // 新增：零散数量
-                    const subUnitName = cols[6]?.trim() || null;
-                    const subCapacity = parseInt(cols[7]) || null;
+                    const subUnitName = cols[5]?.trim() || null;
+                    const subCapacity = parseInt(cols[6]) || null;
+                    const looseQty = parseFloat(cols[7]) || 0; // 零散数量现在位于索引 7
 
                     // 计算入库总数：(主数量 * 换算) + 零散数量
                     let finalQty = mainQty;
