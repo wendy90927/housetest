@@ -1011,12 +1011,13 @@ let csvContent = "\uFEFF物品名称(必填),大类,标签(小类),主单位(大
             allItems.forEach(item => { 
                 const tagsStr = (item.tags || []).join(';');
                 // 还原显示数量：如果是多级单位，需要除以容量得到主数量，以便重新导入时计算正确
-                let displayQty = item.quantity;
-                if (item.subUnit && item.subCapacity > 1) {
-                    displayQty = item.quantity / item.subCapacity;
-                }
-                csvContent += `${item.name},${item.category},${tagsStr},${item.room},${item.location || ''},${displayQty},${item.unit||'个'},${item.subUnit||''},${item.subCapacity||''}\n`; 
-            });
+let displayQty = item.quantity;
+            if (item.subUnit && item.subCapacity > 1) {
+                displayQty = item.quantity / item.subCapacity;
+            }
+            // 修正数据顺序：名称,分类,标签,主单位,主数量,子单位,换算,房间,具体位置
+            csvContent += `${item.name},${item.category},${tagsStr},${item.unit||'个'},${displayQty},${item.subUnit||''},${item.subCapacity||''},${item.room},${item.location || ''}\n`; 
+        });
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.setAttribute("href", url); link.setAttribute("download", `物品备份_${new Date().toISOString().slice(0,10)}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); announce("导出成功");
         });
 document.getElementById('btn-download-template').addEventListener('click', () => {
@@ -1035,11 +1036,12 @@ document.getElementById('file-upload').addEventListener('change', (e) => {
                     const tagStr = cols[2]?.trim() || '';
                     const tags = tagStr ? tagStr.split(';').map(t => t.trim()).filter(t=>t) : [];
 
-                    // 解析数量与多级单位逻辑 (新逻辑)
-                    const mainQty = parseFloat(cols[5]) || 1;
-                    const unitName = cols[6]?.trim() || '个';
-                    const subUnitName = cols[7]?.trim() || null;
-                    const subCapacity = parseInt(cols[8]) || null;
+// 解析数量与多级单位逻辑 (修正后)
+                // 对应新表头：Name(0), Cat(1), Tags(2), Unit(3), Qty(4), SubUnit(5), Scale(6), Room(7), Loc(8)
+                const unitName = cols[3]?.trim() || '个';
+                const mainQty = parseFloat(cols[4]) || 1;
+                const subUnitName = cols[5]?.trim() || null;
+                const subCapacity = parseInt(cols[6]) || null;
 
                     // 计算入库总数 (如果有子单位，存最小单位总数)
                     let finalQty = mainQty;
@@ -1050,9 +1052,9 @@ document.getElementById('file-upload').addEventListener('change', (e) => {
                     await addDoc(itemsRef, { 
                         name: name, 
                         category: cat,
-                        tags: tags,
-                        room: cols[3]?.trim() || '客厅', 
-                        location: cols[4]?.trim() || '', 
+tags: tags,
+                    room: cols[7]?.trim() || '客厅', 
+                    location: cols[8]?.trim() || '',
                         quantity: finalQty, 
                         unit: unitName, 
                         subUnit: subUnitName,
